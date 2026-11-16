@@ -267,3 +267,33 @@ test('POS UI links membership checkout and mobile sidebar scrolls',()=>{
  assert(css.includes('.demo-sidebar nav{flex:1 1 auto;min-height:0;overflow-y:auto'));
  assert(css.includes('touch-action:pan-y'));
 });
+
+test('full cash refund reverses paid membership grants while partial refund is refused',()=>{
+ const data=demo.initialDemoData();
+ const sale={id:'POS-RF-1',date:'2026-11-16T01:00:00Z',branchId:'b1',customerId:'cus1',cashier:'Cashier',
+ type:'standard',payment:'cash',lines:[{productId:'svc1',name:'Gym Monthly Membership',qty:1,price:149900}],
+ subtotal:149900,discount:0,tax:0,service:0,total:149900,tender:149900};
+ const ext=demo.fulfillMembershipSale(demo.seedExtension(data.products),sale,data.products);
+ assert.throws(()=>demo.refundDemoSale(ext,sale,100,'Partial adjustment'),/full refund/i);
+ const refunded=demo.refundDemoSale(ext,sale,sale.total,'Customer cancellation');
+ assert.equal(refunded.refunds.length,1);
+ assert.equal(refunded.entitlements[0].status,'cancelled');
+ assert.equal(refunded.entitlements[0].events.at(-1).saleId,sale.id);
+ assert.equal(ext.entitlements[0].status,'active','the original snapshot remains immutable');
+});
+test('full refund of renewal restores previous expiry and rejects reversing older renewals',()=>{
+ const data=demo.initialDemoData();
+ const base={date:'2026-11-16T01:00:00Z',branchId:'b1',customerId:'cus1',cashier:'Cashier',
+ type:'standard',payment:'cash',lines:[{productId:'svc1',name:'Gym Monthly Membership',qty:1,price:149900}],
+ subtotal:149900,discount:0,tax:0,service:0,total:149900,tender:149900};
+ const first={...base,id:'POS-RF-2'};
+ const second={...base,id:'POS-RF-3',date:'2026-11-17T01:00:00Z'};
+ let ext=demo.fulfillMembershipSale(demo.seedExtension(data.products),first,data.products);
+ const before=ext.entitlements[0].expiresOn;
+ ext=demo.fulfillMembershipSale(ext,second,data.products);
+ assert.notEqual(ext.entitlements[0].expiresOn,before);
+ assert.throws(()=>demo.refundDemoSale(ext,first,first.total,'Invalid chronology'),/later membership changes/i);
+ ext=demo.refundDemoSale(ext,second,second.total,'Reverse renewal');
+ assert.equal(ext.entitlements[0].expiresOn,before);
+ assert.equal(ext.entitlements[0].status,'active');
+});

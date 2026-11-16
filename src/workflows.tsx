@@ -206,7 +206,7 @@ export function RefundWorkflows({data,ext,update,notify}:Props){
  const [order,setOrder]=useState(''),[amount,setAmount]=useState(''),[reason,setReason]=useState('Customer requested refund'),[error,setError]=useState('');
  const eligible=data.orders.filter(s=>s.payment==='cash');
  function submit(e:React.FormEvent){e.preventDefault();const sale=eligible.find(s=>s.id===order);if(!sale){setError('Choose a cash sale');return;}try{update(old=>refundDemoSale(old,sale,Math.round(Number(amount)*100),reason));setError('');notify('Cash refund recorded without changing historical sales.');}catch(e){setError((e as Error).message);}}
- return <><Intro title="Cash refunds & transaction adjustments" text="Simulate supervised cash refunds with an append-only refund history. Cashless gateway reversals and item-level restocking are deliberately unavailable."/>
+ return <><Intro title="Cash refunds & transaction adjustments" text="Simulate supervised cash refunds with an append-only refund history. Fully refunded POS memberships are revoked or their renewal reversed. Partial membership refunds, cashless gateway reversals and item-level restocking are unavailable."/>
  <Section title="Authorize sample refund"><form className="demo-workflow-form" onSubmit={submit}>
  <Select label="Cash sale" value={order} onChange={setOrder}><option value="">Choose order</option>{eligible.map(s=><option key={s.id} value={s.id}>{s.id} · {currency(s.total)}</option>)}</Select>
  <label className="demo-label">Refund amount (PHP)<input type="number" min=".01" step=".01" value={amount} onChange={e=>setAmount(e.target.value)}/></label>

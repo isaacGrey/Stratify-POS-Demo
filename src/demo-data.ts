@@ -178,7 +178,7 @@ export function seedExtension(products:DemoProduct[]=seedProducts):DemoExtension
   suppliers:[{id:'sup1',name:'Demo Supply Co.',contact:'supplier@example.invalid'}],
   purchases:[],registers:[],refunds:[],holds:[],
   plans:[{id:'plan1',productId:'svc1',name:'Gym Monthly Membership',durationKind:'months',durationValue:1,active:true,sellThroughPos:true},
-         {id:'plan2',productId:'svc2',name:'Dental Care Package',durationKind:'none',durationValue:null,active:true,sellThroughPos:true}],
+         {id:'plan2',productId:'svc2',name:'Dental Care Plan',durationKind:'none',durationValue:null,active:true,sellThroughPos:true}],
   customers:[{id:'cus1',name:'Taylor Santos',email:'taylor@example.invalid',phone:'',reference:'MEM-001'}],
   entitlements:[],requests:[],tickets:[]};
 }
@@ -251,7 +251,22 @@ export function refundDemoSale(ext:DemoExtension,sale:DemoSale,amount:number,rea
  if(!Number.isInteger(amount)||amount<=0||amount>sale.total-prior)throw Error('Refund exceeds remaining paid amount');
  if(!reason.trim())throw Error('Provide a refund reason');
  if(sale.payment!=='cash')throw Error('Only cash refunds are simulated; external gateway refunds are unavailable');
- return {...ext,refunds:[{id:newId(),orderId:sale.id,date:new Date().toISOString(),amount,reason},...ext.refunds]};
+ const linked=ext.entitlements.filter(e=>e.events.some(v=>v.saleId===sale.id&&(v.kind==='grant'||v.kind==='renew')));
+ // A partial cash refund cannot unambiguously reverse one line in a mixed cart.
+ if(linked.length&&prior+amount!==sale.total)throw Error('Membership-linked sales require a full refund to reverse the membership');
+ const at=new Date().toISOString();
+ const entitlements=ext.entitlements.map(e=>{
+   const index=e.events.findIndex(v=>v.saleId===sale.id&&(v.kind==='grant'||v.kind==='renew'));
+   if(index<0)return e;
+   if(e.events.slice(index+1).some(v=>v.kind==='grant'||v.kind==='renew'||v.kind==='cancel'))
+     throw Error('Cannot reverse a membership payment after later membership changes');
+   const event=e.events[index];
+   const expiry=event.kind==='renew'?(e.events[index-1]?.expiresOn??null):e.expiresOn;
+   return {...e,expiresOn:expiry,status:event.kind==='grant'?'cancelled' as const:e.status,
+     events:[...e.events,{id:newId(),at,kind:'cancel' as const,saleId:sale.id,
+       reason:'Full POS refund '+sale.id+': '+reason,expiresOn:expiry}]};
+ });
+ return {...ext,entitlements,refunds:[{id:newId(),orderId:sale.id,date:at,amount,reason},...ext.refunds]};
 }
 
 /**
