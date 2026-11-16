@@ -33,3 +33,9 @@
 .demo-workflow-section .demo-pill{display:inline-flex;align-items:center;gap:5px}
 @media(max-width:750px){.demo-workflow-form{grid-template-columns:1fr 1fr;padding:12px}.demo-workflow-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-workflow-cards{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.demo-workflow-form,.demo-workflow-cards{grid-template-columns:1fr}.demo-workflow-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-workflow-stat{padding:11px}.demo-inline-form{gap:6px}.demo-workflow-section .demo-table{font-size:11px}}
+
+/* Restaurant-specific choices only appear for food/beverage items in the cart. */
+.demo-fulfillment-options{display:grid;gap:7px;padding:0 0 12px}
+.demo-fulfillment-options>strong{font-size:11px;color:#5c514a;letter-spacing:.02em}
+.demo-fulfillment-options>small{font-size:11px;color:#84776c;line-height:1.4}
+.demo-fulfillment-options .demo-order-types{margin:0}

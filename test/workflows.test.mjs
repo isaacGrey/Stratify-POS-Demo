@@ -65,3 +65,80 @@ test('demo UI has navigation and linked workflow modules',()=>{
   assert(flow.includes(step),'Missing workflow '+step);
  assert(ui.includes('DEMO — SIMULATED DATA ONLY'));
 });
+
+test('food and beverage checkout routing remains item-type-specific',async()=>{
+ const source=readFileSync(new URL('../src/sale-flow.ts',import.meta.url),'utf8');
+ const js=transformSync(source,{loader:'ts',format:'esm',target:'es2022'}).code;
+ const {isFoodOrBeverage,usesFoodFulfillment,saleOrderType,needsKitchenTicket}=
+   await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+ const food={kind:'food_beverage',category:'Coffee'};
+ const retail={kind:'physical',category:'Retail'};
+ const gym={kind:'service',category:'Fitness Services'};
+ const dental={kind:'service',category:'Clinical Services'};
+ const nonStock={kind:'non_stock',category:'Other'};
+ assert.equal(isFoodOrBeverage(food),true);
+ assert.equal(isFoodOrBeverage(retail),false);
+ assert.equal(isFoodOrBeverage(gym),false);
+ assert.equal(isFoodOrBeverage({kind:'service',category:'Food'}),false,
+   'Explicit service type overrides misleading category');
+ assert.equal(isFoodOrBeverage({kind:'physical',category:'Coffee'}),false,
+   'Physical product type overrides misleading category');
+ assert.equal(isFoodOrBeverage({category:'Coffee'}),true,
+   'Legacy untyped food catalog remains compatible');
+ assert.equal(usesFoodFulfillment([]),false);
+ assert.equal(usesFoodFulfillment([retail,gym,dental,nonStock]),false);
+ assert.equal(usesFoodFulfillment([retail,food]),true);
+ for(const picked of ['dine_in','delivery','takeout']){
+   assert.equal(saleOrderType([retail,gym],picked),'standard',
+     'Non-food sale must never retain restaurant mode');
+   assert.equal(saleOrderType([retail,food],picked),picked,
+     'Mixed cart applies food fulfillment only when food is present');
+ }
+ assert.equal(saleOrderType([food],'standard'),'takeout');
+ assert.equal(needsKitchenTicket([retail,gym]),false);
+ assert.equal(needsKitchenTicket([retail,food]),true);
+});
+
+test('generic checkout UI hides dine-in, takeout and delivery for non-food carts',()=>{
+ const source=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
+ assert(source.includes('hasFoodItems&&<div className="demo-fulfillment-options">'));
+ assert(source.includes("type:saleOrderType(lines.map(x=>x.product),type)"));
+ assert(source.includes('needsKitchenTicket(lines.map(x=>x.product))'));
+ assert(source.includes('Category (any industry)'));
+ assert(source.includes("kind:'physical' as DemoKind"));
+});
+
+test('new multi-industry catalog includes grocery, retail, clinic, gym, salon and repairs',()=>{
+ const data=demo.initialDemoData();
+ for(const category of ['Grocery','Apparel','Motorcycle Parts','Clinical Services','Fitness Services','Salon Services','Repair Services'])
+   assert(data.products.some(p=>p.category===category),'Missing '+category+' sample');
+ assert(data.products.some(p=>p.kind==='physical'));
+ assert(data.products.some(p=>p.kind==='service'));
+ assert(data.products.some(p=>p.kind==='food_beverage'));
+ assert(!data.footer.includes('Café'),'Default receipt must be industry-neutral');
+});
+
+test('saved demo state upgrades catalog and stocks without discarding user changes',()=>{
+ const seed=demo.initialDemoData();
+ const saved={...seed,products:[...seed.products.filter(p=>p.id==='p1'),{
+    id:'personalized',name:'Custom hardware',category:'Hardware',price:5000,cost:2000,
+    stock:3,reorder:1,emoji:'🔩',active:true
+ }]};
+ const extension=demo.seedExtension(saved.products);
+ extension.balances.b1.p1=3;
+ const memory=new Map([[demo.DEMO_STORAGE_KEY,JSON.stringify(saved)],
+                       [demo.EXTENSION_KEY,JSON.stringify(extension)]]);
+ const originalStorage=globalThis.localStorage;
+ globalThis.localStorage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+ try{
+   const upgraded=demo.readDemoData();
+   assert(upgraded.products.some(p=>p.id==='personalized'));
+   assert(upgraded.products.some(p=>p.id==='r2'));
+   assert(upgraded.products.some(p=>p.id==='svc5'));
+   assert.equal(upgraded.products.find(p=>p.id==='personalized').kind,'physical');
+   const inventory=demo.readExtension(upgraded.products);
+   assert.equal(inventory.balances.b1.p1,3,'existing customer stock must be preserved');
+   assert(inventory.balances.b1.r2>0,'new sample item needs initial stock');
+   assert.equal(inventory.balances.b1.svc5,0,'new service must not have physical stock');
+ }finally{globalThis.localStorage=originalStorage;}
+});

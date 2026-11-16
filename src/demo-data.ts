@@ -3,7 +3,7 @@
  */
 export type DemoRole = 'owner' | 'manager' | 'cashier';
 export type DemoPayment = 'cash' | 'gcash' | 'maya' | 'card';
-export type DemoOrderType = 'takeout' | 'dine_in' | 'delivery';
+export type DemoOrderType = 'standard' | 'takeout' | 'dine_in' | 'delivery';
 
 export interface DemoProduct {
   id: string; name: string; category: string; price: number; cost: number;
@@ -51,7 +51,16 @@ const seedProducts: DemoProduct[] = [
   { id:'p12',name:'Chicken Pesto Panini',category:'Food',price:26500,cost:13300,stock:6,reorder:6,emoji:'🥙',active:true },
   { id:'svc1',name:'Gym Monthly Membership',category:'Services',price:149900,cost:0,stock:0,reorder:0,emoji:'🏋️',active:true,kind:'service' },
   { id:'svc2',name:'Dental Care Package',category:'Services',price:299900,cost:0,stock:0,reorder:0,emoji:'🦷',active:true,kind:'service' },
-  { id:'r1',name:'Motorcycle Engine Oil',category:'Retail',price:45000,cost:26000,stock:45,reorder:12,emoji:'🛢️',active:true,kind:'physical' }
+  { id:'r1',name:'Motorcycle Engine Oil',category:'Retail',price:45000,cost:26000,stock:45,reorder:12,emoji:'🛢️',active:true,kind:'physical' },
+  { id:'r2',name:'Premium Rice 5kg',category:'Grocery',price:32500,cost:24000,stock:70,reorder:15,emoji:'🍚',active:true,kind:'physical' },
+  { id:'r3',name:'Cotton T-Shirt',category:'Apparel',price:49900,cost:22000,stock:32,reorder:10,emoji:'👕',active:true,kind:'physical' },
+  { id:'r4',name:'Motorcycle Brake Pads',category:'Motorcycle Parts',price:65000,cost:36500,stock:18,reorder:6,emoji:'🏍️',active:true,kind:'physical' },
+  { id:'r5',name:'Shampoo 250ml',category:'Retail',price:18500,cost:11000,stock:46,reorder:12,emoji:'🧴',active:true,kind:'physical' },
+  { id:'r6',name:'Notebook A5',category:'Office Supplies',price:8500,cost:3900,stock:60,reorder:12,emoji:'📓',active:true,kind:'physical' },
+  { id:'svc3',name:'Dental Cleaning',category:'Clinical Services',price:180000,cost:0,stock:0,reorder:0,emoji:'🦷',active:true,kind:'service' },
+  { id:'svc4',name:'Gym Day Pass',category:'Fitness Services',price:25000,cost:0,stock:0,reorder:0,emoji:'🏋️',active:true,kind:'service' },
+  { id:'svc5',name:'Haircut Service',category:'Salon Services',price:35000,cost:0,stock:0,reorder:0,emoji:'💇',active:true,kind:'service' },
+  { id:'svc6',name:'Motorcycle Maintenance',category:'Repair Services',price:120000,cost:0,stock:0,reorder:0,emoji:'🔧',active:true,kind:'service' }
 ];
 const seedBranches: DemoBranch[] = [
   {id:'b1',name:'BGC Flagship',location:'Bonifacio Global City, Taguig',active:true},
@@ -66,7 +75,7 @@ function seedSale(index: number, day: number, hour: number, branchId: string, pa
 export function initialDemoData(): DemoData {
   return {
     version:1,
-    products:seedProducts.map(product=>({...product})),
+    products:seedProducts.map(product=>({...product,kind:product.kind||'food_beverage'})),
     branches:seedBranches.map(branch=>({...branch})),
     orders:[
       seedSale(0,0,9,'b1','cash',[[0,2],[5,1]]),
@@ -88,7 +97,7 @@ export function initialDemoData(): DemoData {
       {id:'s2',name:'Sam Reyes',role:'manager',branchId:'b2',shiftStart:null},
       {id:'s3',name:'Jamie Cruz',role:'cashier',branchId:'b1',shiftStart:null}
     ],
-    taxRate:0,serviceRate:0,footer:'Thank you for visiting Stratify Café!',
+    taxRate:0,serviceRate:0,footer:'Thank you for your purchase at StratifyPOS Demo!',
     promotionActive:true
   };
 }
@@ -97,7 +106,16 @@ export function readDemoData(): DemoData {
     const stored = localStorage.getItem(DEMO_STORAGE_KEY);
     if (stored) {
       const value: DemoData = JSON.parse(stored);
-      if (value.version===1 && Array.isArray(value.products) && Array.isArray(value.orders) && Array.isArray(value.branches) && Array.isArray(value.staff)) return value;
+      if (value.version===1 && Array.isArray(value.products) && Array.isArray(value.orders) && Array.isArray(value.branches) && Array.isArray(value.staff)) {
+        // Retain all visitor edits while adding the multi-industry sample catalog.
+        const known = new Set(value.products.map(p=>p.id));
+        const added=seedProducts.filter(p=>!known.has(p.id)).map(p=>({...p,kind:p.kind||'food_beverage'}));
+        const products=value.products.map(p=>({
+          ...p,
+          kind:p.kind||(['Coffee','Tea & Matcha','Pastries','Food'].includes(p.category)?'food_beverage':'physical')
+        }));
+        return {...value,products:[...products,...added]};
+      }
     }
   } catch { /* Storage may be disabled by the visitor. */ }
   return initialDemoData();
@@ -144,7 +162,20 @@ export function seedExtension(products:DemoProduct[]=seedProducts):DemoExtension
 export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension {
  try {
   const value=JSON.parse(localStorage.getItem(EXTENSION_KEY)||'null');
-  if(value?.version===2&&value.balances&&Array.isArray(value.entitlements)&&Array.isArray(value.movements)) return value;
+  if(value?.version===2&&value.balances&&Array.isArray(value.entitlements)&&Array.isArray(value.movements)) {
+    const balances:Record<string,Record<string,number>>={
+      ...value.balances,b1:{...(value.balances.b1||{})},b2:{...(value.balances.b2||{})}
+    };
+    for(const item of products) {
+      // Only initialize new catalog IDs; do not change existing customer stock.
+      if(balances.b1[item.id]===undefined&&balances.b2[item.id]===undefined) {
+        const first=Math.ceil(item.stock*.65);
+        balances.b1[item.id]=first;
+        balances.b2[item.id]=item.stock-first;
+      }
+    }
+    return {...value,balances};
+  }
  }catch{}
  return seedExtension(products);
 }
