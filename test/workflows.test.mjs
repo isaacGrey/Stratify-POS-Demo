@@ -204,3 +204,66 @@ test('QR confirmation uses shared food routing rather than unconditional kitchen
  assert(workflow.includes("type:saleOrderType(foodProducts,'dine_in')"));
  assert(workflow.includes("data.products.filter(p=>p.active&&needsKitchenTicket([p]))"));
 });
+
+test('catalog consistently exposes type, class, category and inventory tracking',()=>{
+ const data=demo.initialDemoData();
+ const gym=data.products.find(p=>p.id==='svc1');
+ const latte=data.products.find(p=>p.id==='p1');
+ const dental=data.products.find(p=>p.id==='svc3');
+ const oil=data.products.find(p=>p.id==='r1');
+ assert.equal(demo.productType(gym),'membership');
+ assert.equal(demo.productClass(gym),'membership_plan');
+ assert.equal(demo.tracksStock(gym),false);
+ assert.equal(demo.productType(latte),'physical');
+ assert.equal(demo.productClass(latte),'food_beverage');
+ assert.equal(demo.tracksStock(latte),true);
+ assert.equal(demo.productType(dental),'service');
+ assert.equal(demo.productClass(dental),'general_service');
+ assert.equal(demo.tracksStock(dental),false);
+ assert.equal(demo.productClass(oil),'general_merchandise');
+ assert.equal(demo.tracksStock(oil),true);
+ assert.equal(demo.tracksStock(demo.normalizeProduct({id:'custom',kind:'non_stock',category:'Retail',name:'Gift card',stock:0,reorder:0})),false);
+});
+test('paid membership POS sale grants, links and renews exactly once',()=>{
+ const data=demo.initialDemoData();
+ let ext=demo.seedExtension(data.products);
+ const sale={id:'POS-MEM-1',date:'2026-11-16T03:00:00.000Z',branchId:'b1',customerId:'cus1',cashier:'Jamie Cruz',type:'standard',payment:'cash',
+  lines:[{productId:'svc1',name:'Gym Monthly Membership',qty:1,price:149900}],
+  subtotal:149900,discount:0,tax:0,service:0,total:149900,tender:149900};
+ ext=demo.fulfillMembershipSale(ext,sale,data.products);
+ assert.equal(ext.entitlements.length,1);
+ const first=ext.entitlements[0];
+ assert.equal(first.customerId,'cus1');
+ assert.equal(first.planId,'plan1');
+ assert.equal(first.events[0].saleId,sale.id);
+ assert.equal(first.expiresOn,'2026-12-16');
+ ext=demo.fulfillMembershipSale(ext,sale,data.products);
+ assert.equal(ext.entitlements.length,1,'retry must not create a second membership');
+ assert.equal(ext.entitlements[0].events.length,1,'retry must not double-renew');
+ const renewed={...sale,id:'POS-MEM-2',date:'2026-11-17T03:00:00.000Z'};
+ ext=demo.fulfillMembershipSale(ext,renewed,data.products);
+ assert.equal(ext.entitlements.length,1,'renew existing plan');
+ assert.equal(ext.entitlements[0].expiresOn,'2027-01-16');
+ assert.equal(ext.entitlements[0].events[1].kind,'renew');
+ assert.equal(ext.entitlements[0].events[1].saleId,renewed.id);
+});
+test('membership checkout rejects missing customer, disabled plan and invalid quantity',()=>{
+ const data=demo.initialDemoData(),ext=demo.seedExtension(data.products);
+ const sale={id:'POS-MEM',date:'2026-11-16T03:00:00.000Z',branchId:'b1',customerId:'cus1',
+ lines:[{productId:'svc1',name:'Gym Monthly Membership',qty:1}]};
+ assert.throws(()=>demo.fulfillMembershipSale(ext,{...sale,customerId:undefined},data.products),/customer/i);
+ assert.throws(()=>demo.fulfillMembershipSale(ext,{...sale,lines:[{...sale.lines[0],qty:2}]},data.products),/one membership/i);
+ assert.throws(()=>demo.fulfillMembershipSale({...ext,plans:ext.plans.map(p=>({...p,sellThroughPos:false}))},sale,data.products),/not available/i);
+ assert.equal(ext.entitlements.length,0,'failed sale must not change state');
+});
+test('POS UI links membership checkout and mobile sidebar scrolls',()=>{
+ const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/demo.css',import.meta.url),'utf8');
+ const workflows=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
+ for(const key of ['productClass','productType','tracksStock','fulfillMembershipSale','customerId','New membership customer name','Product class','Membership / subscription'])
+  assert(ui.includes(key),'Missing '+key);
+ assert(workflows.includes('Sell through POS'));
+ assert(workflows.includes('Membership plan created and linked to POS.'));
+ assert(css.includes('.demo-sidebar nav{flex:1 1 auto;min-height:0;overflow-y:auto'));
+ assert(css.includes('touch-action:pan-y'));
+});

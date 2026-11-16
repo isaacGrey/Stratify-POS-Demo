@@ -7,14 +7,14 @@ export type DemoOrderType = 'standard' | 'takeout' | 'dine_in' | 'delivery';
 
 export interface DemoProduct {
   id: string; name: string; category: string; price: number; cost: number;
-  stock: number; reorder: number; emoji: string; active: boolean; kind?:DemoKind; sku?:string; barcode?:string;
+  stock: number; reorder: number; emoji: string; active: boolean; kind?:DemoKind; itemType?:DemoItemType; itemClass?:DemoItemClass; trackInventory?:boolean; sku?:string; barcode?:string;
 }
 export interface DemoBranch { id: string; name: string; location: string; active: boolean; }
 export interface DemoSaleLine { productId: string; name: string; price: number; qty: number; }
 export interface DemoSale {
   id: string; date: string; branchId: string; cashier: string; type: DemoOrderType;
   payment: DemoPayment; lines: DemoSaleLine[]; subtotal: number;
-  discount: number; tax: number; service: number; total: number; tender: number;
+  discount: number; tax: number; service: number; total: number; tender: number; customerId?:string;
 }
 export interface DemoStaff { id: string; name: string; role: DemoRole; branchId: string; shiftStart: string | null; }
 export interface DemoData {
@@ -49,8 +49,8 @@ const seedProducts: DemoProduct[] = [
   { id:'p10',name:'Ham & Cheese Sandwich',category:'Food',price:22500,cost:10200,stock:12,reorder:5,emoji:'🥪',active:true },
   { id:'p11',name:'Classic Hot Chocolate',category:'Tea & Matcha',price:15500,cost:6200,stock:24,reorder:8,emoji:'🍫',active:true },
   { id:'p12',name:'Chicken Pesto Panini',category:'Food',price:26500,cost:13300,stock:6,reorder:6,emoji:'🥙',active:true },
-  { id:'svc1',name:'Gym Monthly Membership',category:'Services',price:149900,cost:0,stock:0,reorder:0,emoji:'🏋️',active:true,kind:'service' },
-  { id:'svc2',name:'Dental Care Package',category:'Services',price:299900,cost:0,stock:0,reorder:0,emoji:'🦷',active:true,kind:'service' },
+  { id:'svc1',name:'Gym Monthly Membership',category:'Gym Memberships',price:149900,cost:0,stock:0,reorder:0,emoji:'🏋️',active:true,kind:'service',itemType:'membership',itemClass:'membership_plan' },
+  { id:'svc2',name:'Dental Care Plan',category:'Dental Memberships',price:299900,cost:0,stock:0,reorder:0,emoji:'🦷',active:true,kind:'service',itemType:'membership',itemClass:'membership_plan' },
   { id:'r1',name:'Motorcycle Engine Oil',category:'Retail',price:45000,cost:26000,stock:45,reorder:12,emoji:'🛢️',active:true,kind:'physical' },
   { id:'r2',name:'Premium Rice 5kg',category:'Grocery',price:32500,cost:24000,stock:70,reorder:15,emoji:'🍚',active:true,kind:'physical' },
   { id:'r3',name:'Cotton T-Shirt',category:'Apparel',price:49900,cost:22000,stock:32,reorder:10,emoji:'👕',active:true,kind:'physical' },
@@ -75,7 +75,7 @@ function seedSale(index: number, day: number, hour: number, branchId: string, pa
 export function initialDemoData(): DemoData {
   return {
     version:1,
-    products:seedProducts.map(product=>({...product,kind:product.kind||'food_beverage'})),
+    products:seedProducts.map(normalizeProduct),
     branches:seedBranches.map(branch=>({...branch})),
     orders:[
       seedSale(0,0,9,'b1','cash',[[0,2],[5,1]]),
@@ -109,11 +109,8 @@ export function readDemoData(): DemoData {
       if (value.version===1 && Array.isArray(value.products) && Array.isArray(value.orders) && Array.isArray(value.branches) && Array.isArray(value.staff)) {
         // Retain all visitor edits while adding the multi-industry sample catalog.
         const known = new Set(value.products.map(p=>p.id));
-        const added=seedProducts.filter(p=>!known.has(p.id)).map(p=>({...p,kind:p.kind||'food_beverage'}));
-        const products=value.products.map(p=>({
-          ...p,
-          kind:p.kind||(['Coffee','Tea & Matcha','Pastries','Food'].includes(p.category)?'food_beverage':'physical')
-        }));
+        const added=seedProducts.filter(p=>!known.has(p.id)).map(normalizeProduct);
+        const products=value.products.map(normalizeProduct);
         return {...value,products:[...products,...added]};
       }
     }
@@ -127,15 +124,41 @@ export function writeDemoData(value: DemoData): void {
 // V2 extension keeps the original demo independently deployable while adding
 // branch-aware stock and commercial workflows. The records below are PUBLIC fixtures.
 export type DemoKind='food_beverage'|'physical'|'service'|'bundle'|'non_stock';
+export type DemoItemType='physical'|'service'|'membership';
+export type DemoItemClass='food_beverage'|'general_merchandise'|'general_service'|'membership_plan';
+const foodCategories=new Set(['coffee','tea & matcha','pastries','food','beverages','drinks']);
+/** Product type drives commercial workflow; class controls specialized fulfillment. */
+export function productType(p:DemoProduct):DemoItemType {
+ if(p.itemType)return p.itemType;
+ if(p.id==='svc1'||p.id==='svc2')return 'membership'; // migrate old sample plans
+ return p.kind==='service'?'service':'physical';
+}
+export function productClass(p:DemoProduct):DemoItemClass {
+ if(p.itemClass)return p.itemClass;
+ const type=productType(p);
+ if(type==='membership')return 'membership_plan';
+ if(p.kind==='food_beverage'||(!p.kind&&foodCategories.has((p.category||'').trim().toLowerCase())))return 'food_beverage';
+ return type==='service'?'general_service':'general_merchandise';
+}
+export function tracksStock(p:DemoProduct):boolean {
+ return productType(p)==='physical'&&(p.trackInventory??p.kind!=='non_stock');
+}
+export function normalizeProduct(p:DemoProduct):DemoProduct {
+ const itemType=productType(p),itemClass=productClass(p),trackInventory=tracksStock(p);
+ return {...p,itemType,itemClass,trackInventory,
+   kind:itemClass==='food_beverage'?'food_beverage':itemType==='physical'?(trackInventory?'physical':'non_stock'):'service',
+   stock:trackInventory?p.stock:0,reorder:trackInventory?p.reorder:0};
+}
+
 export interface DemoMovement {id:string;date:string;productId:string;from:string|null;to:string|null;qty:number;kind:'transfer'|'adjustment'|'sale'|'receive'|'refund';reason:string}
 export interface DemoSupplier {id:string;name:string;contact:string}
 export interface DemoPurchase {id:string;date:string;branchId:string;supplierId:string;productId:string;ordered:number;received:number;cost:number}
 export interface DemoRegister {id:string;cashier:string;branchId:string;opening:number;movements:number;status:'open'|'closed';counted?:number;openedAt:string;closedAt?:string}
 export interface DemoRefund {id:string;orderId:string;date:string;amount:number;reason:string}
 export interface DemoHold {id:string;branchId:string;cashier:string;createdAt:string;items:{productId:string;qty:number}[]}
-export interface DemoServicePlan {id:string;productId:string;name:string;durationKind:'none'|'months'|'days';durationValue:number|null;active:boolean}
+export interface DemoServicePlan {id:string;productId:string;name:string;durationKind:'none'|'months'|'days';durationValue:number|null;active:boolean;sellThroughPos?:boolean}
 export interface DemoCustomer {id:string;name:string;email:string;phone:string;reference:string}
-export interface DemoEntitlement {id:string;customerId:string;planId:string;branchId:string;startsOn:string;expiresOn:string|null;status:'active'|'cancelled';events:{id:string;at:string;kind:'grant'|'renew'|'cancel';reason:string;expiresOn:string|null}[]}
+export interface DemoEntitlement {id:string;customerId:string;planId:string;branchId:string;startsOn:string;expiresOn:string|null;status:'active'|'cancelled';events:{id:string;at:string;kind:'grant'|'renew'|'cancel';reason:string;expiresOn:string|null;saleId?:string}[]}
 export interface DemoQrRequest {id:string;branchId:string;table:string;items:{productId:string;qty:number}[];payment:DemoPayment;status:'awaiting_payment'|'confirmed'|'cancelled';createdAt:string;orderId?:string}
 export interface DemoKitchenTicket {id:string;orderId:string;branchId:string;status:'pending'|'preparing'|'ready'|'completed';updatedAt:string}
 export interface DemoExtension {
@@ -154,8 +177,8 @@ export function seedExtension(products:DemoProduct[]=seedProducts):DemoExtension
  return {version:2,balances,movements:[],
   suppliers:[{id:'sup1',name:'Demo Supply Co.',contact:'supplier@example.invalid'}],
   purchases:[],registers:[],refunds:[],holds:[],
-  plans:[{id:'plan1',productId:'svc1',name:'Gym Monthly Membership',durationKind:'months',durationValue:1,active:true},
-         {id:'plan2',productId:'svc2',name:'Dental Care Package',durationKind:'none',durationValue:null,active:true}],
+  plans:[{id:'plan1',productId:'svc1',name:'Gym Monthly Membership',durationKind:'months',durationValue:1,active:true,sellThroughPos:true},
+         {id:'plan2',productId:'svc2',name:'Dental Care Package',durationKind:'none',durationValue:null,active:true,sellThroughPos:true}],
   customers:[{id:'cus1',name:'Taylor Santos',email:'taylor@example.invalid',phone:'',reference:'MEM-001'}],
   entitlements:[],requests:[],tickets:[]};
 }
@@ -191,11 +214,11 @@ export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension
       if(!sale)return false;
       return sale.lines.some(line=>{
         const p=productById.get(line.productId);
-        return p && (p.kind==='food_beverage' ||
+        return p && (p.itemClass==='food_beverage' || p.kind==='food_beverage' ||
           (!p.kind&&legacyKitchenFoodCategories.has(p.category.trim().toLowerCase())));
       });
     });
-    return {...value,balances,tickets};
+    return {...value,balances,tickets,plans:(value.plans||[]).map((p:DemoServicePlan)=>({...p,sellThroughPos:p.sellThroughPos??(p.id==='plan1'||p.id==='plan2')}))};
   }
  }catch{}
  return seedExtension(products);
@@ -229,4 +252,50 @@ export function refundDemoSale(ext:DemoExtension,sale:DemoSale,amount:number,rea
  if(!reason.trim())throw Error('Provide a refund reason');
  if(sale.payment!=='cash')throw Error('Only cash refunds are simulated; external gateway refunds are unavailable');
  return {...ext,refunds:[{id:newId(),orderId:sale.id,date:new Date().toISOString(),amount,reason},...ext.refunds]};
+}
+
+/**
+ * Apply a simulated paid POS membership transaction once per sale + plan.
+ * All validation precedes mutation, so unknown/hidden plans cannot silently
+ * take money without creating a membership. No actual payments are processed.
+ */
+export function fulfillMembershipSale(ext:DemoExtension,sale:DemoSale,products:readonly DemoProduct[]):DemoExtension {
+ const productById=new Map(products.map(p=>[p.id,p]));
+ const membershipLines=sale.lines.filter(l=>{
+   const p=productById.get(l.productId);
+   return p&&productType(p)==='membership';
+ });
+ if(!membershipLines.length)return ext;
+ if(!sale.customerId||!ext.customers.some(c=>c.id===sale.customerId))throw Error('Choose a valid customer for membership checkout');
+ const planIds=new Set<string>();
+ const matched=membershipLines.map(line=>{
+   const plan=ext.plans.find(p=>p.productId===line.productId);
+   const item=productById.get(line.productId);
+   if(!item?.active||!plan?.active||!plan.sellThroughPos)throw Error('Membership plan is not available for POS checkout');
+   if(line.qty!==1)throw Error('Only one membership per plan may be sold per checkout');
+   if(planIds.has(plan.id))throw Error('Duplicate membership plan in checkout');
+   planIds.add(plan.id);
+   // Also validates a plan's duration before the simulated checkout is saved.
+   calendarExpiry('2026-01-01',plan.durationKind,plan.durationValue);
+   return plan;
+ });
+ let entitlements=[...ext.entitlements];
+ const at=sale.date,day=new Date(new Date(at).getTime()-new Date(at).getTimezoneOffset()*60000).toISOString().slice(0,10);
+ for(const plan of matched){
+   if(entitlements.some(e=>e.planId===plan.id&&e.events.some(v=>v.saleId===sale.id)))continue;
+   const index=entitlements.findIndex(e=>e.customerId===sale.customerId&&e.planId===plan.id&&e.status==='active');
+   if(index<0){
+     const end=calendarExpiry(day,plan.durationKind,plan.durationValue);
+     entitlements.unshift({id:newId(),customerId:sale.customerId!,planId:plan.id,branchId:sale.branchId,
+       startsOn:day,expiresOn:end,status:'active',
+       events:[{id:newId(),at,kind:'grant',reason:'Paid POS checkout '+sale.id,expiresOn:end,saleId:sale.id}]});
+   }else{
+     const previous=entitlements[index];
+     const start=previous.expiresOn&&previous.expiresOn>day?previous.expiresOn:day;
+     const end=previous.expiresOn===null?null:calendarExpiry(start,plan.durationKind,plan.durationValue);
+     entitlements[index]={...previous,expiresOn:end,
+       events:[...previous.events,{id:newId(),at,kind:'renew',reason:'Paid POS renewal '+sale.id,expiresOn:end,saleId:sale.id}]};
+   }
+ }
+ return {...ext,entitlements};
 }

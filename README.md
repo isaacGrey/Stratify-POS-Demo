@@ -46,3 +46,11 @@ The state is stored in browser localStorage. Use **Reset demo** to restore initi
 ### Industry-dependent checkout
 
 The POS displays **Dine-in, Takeout and Delivery** only for orders containing a product explicitly classified as Food & Beverage. Retail and service-only carts are standard sales and never create kitchen tickets. Mixed carts keep the food fulfillment choice; it applies to their food/beverage contents only. Previously saved browser demo data is upgraded with new multi-industry sample items without resetting transactions or transfers.
+
+### Product types, classifications, and linked memberships
+
+The public demo catalog now uses three commercial **Product Types**: Physical product, One-time service, and Membership / subscription. A separate **Product Class** identifies Food & Beverage versus general merchandise or general services. The **Category** remains a free-text grouping (e.g. Coffee, Apparel, Dental Services). Physical products optionally track inventory; membership plans never deduct stock. Dine-in, Takeout, Delivery, and kitchen tickets are shown only for items classified Food & Beverage, even in mixed carts.
+
+Use **Customer Memberships → Plans → Create linked plan** to specify a plan title, price, duration, and **Sell through POS**. Enabling POS sales exposes an automatically linked catalog item (including the demo Gym Monthly Membership). At checkout, the cashier selects or registers a customer. A successful simulated sale creates or renews the entitlement and records its POS transaction ID in the membership history. Duplicate sale IDs cannot grant twice. Automatic recurring charges are **not** offered. Disable "Sell through POS" in Memberships to hide the plan from the cashier without deleting historical sales or entitlements.
+
+On mobile, the full sidebar navigation is independently vertically scrollable with touch gestures and safe-area padding. This repository remains a **browser-local showcase**, not a connected server, payment processor or subscription billing implementation.

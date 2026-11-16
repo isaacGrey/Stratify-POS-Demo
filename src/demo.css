@@ -39,3 +39,24 @@
 .demo-fulfillment-options>strong{font-size:11px;color:#5c514a;letter-spacing:.02em}
 .demo-fulfillment-options>small{font-size:11px;color:#84776c;line-height:1.4}
 .demo-fulfillment-options .demo-order-types{margin:0}
+
+.demo-plan-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid #efede9;font-size:12px}
+.demo-plan-row small{display:block;color:#8a8178;margin-top:5px;font-size:11px}
+@media(max-width:520px){.demo-plan-row{flex-wrap:wrap}}
+
+/* Make the navigation itself scrollable on short mobile screens. */
+.demo-sidebar{min-height:0;height:100vh;height:100dvh;overflow:hidden}
+.demo-sidebar nav{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:12px}
+.demo-sidebar-bottom{flex:0 0 auto}
+.demo-sidebar .demo-brand,.demo-sidebar .demo-workspace,.demo-sidebar .demo-nav-caption{flex-shrink:0}
+@media(max-width:900px){
+ .demo-sidebar{height:100vh;height:100dvh;max-height:100dvh;width:min(85vw,290px)}
+ .demo-sidebar nav{touch-action:pan-y}
+ .demo-sidebar-bottom{padding-bottom:env(safe-area-inset-bottom)}
+}
+@media(max-height:580px){.demo-sidebar{padding-top:12px}.demo-brand{padding-bottom:12px}.demo-workspace{margin-bottom:12px}.demo-sidebar-note{display:none}}
+.demo-membership-picker{margin:14px 0;padding:13px;border:1px solid #e8e2da;background:#faf8f4;border-radius:10px}
+.demo-membership-picker p{font-size:11px;color:#766d63;margin:0 0 10px}
+.demo-membership-picker .demo-label{margin-bottom:5px}
+.demo-item-kind{display:block;color:#947252;font-size:10px;font-weight:700;margin-top:5px}
+.demo-membership-info{font-size:11px;color:#716a62;margin:8px 0 0}

@@ -1,6 +1,6 @@
 import React,{useState} from 'react';
 import {type DemoData,type DemoExtension,type DemoProduct,type DemoSale,type DemoRole,
-  type DemoServicePlan,calendarExpiry,newId,transferDemoStock,refundDemoSale} from './demo-data';
+  type DemoServicePlan,calendarExpiry,newId,tracksStock,transferDemoStock,refundDemoSale} from './demo-data';
 import {ClipboardList,ArrowRightLeft,Plus,CheckCircle2,Clock3,RefreshCw,PackageCheck,Wallet,ChefHat,QrCode} from 'lucide-react';
 import {kitchenTicketView,kitchenLineItems,needsKitchenTicket,saleOrderType} from './sale-flow';
 
@@ -15,7 +15,7 @@ function Select({label,value,onChange,children}:{label:string;value:string;onCha
 function Message({error}:{error:string}){return error?<p role="alert" className="demo-error">{error}</p>:null}
 export function WarehouseWorkflows({data,ext,update,notify}:Props){
  const [product,setProduct]=useState('p1'),[from,setFrom]=useState('b1'),[to,setTo]=useState('b2'),[qty,setQty]=useState('5'),[reason,setReason]=useState('Rebalance inventory'),[error,setError]=useState('');
- const physical=data.products.filter(p=>p.kind!=='service');
+ const physical=data.products.filter(tracksStock);
  const target=data.products.find(p=>p.id===product);
  function transfer(e:React.FormEvent){e.preventDefault();try{update(old=>transferDemoStock(old,product,from,to,Number(qty),reason));setError('');notify('Stock transfer recorded across both branches.');}catch(err){setError((err as Error).message)}}
  return <><Intro title="Inventory & warehouse transfers" text="Monitor each branch, transfer stock, and inspect every simulated movement. StratifyPOS Development tracks branches; multiple stockrooms within one branch are not yet implemented."/>
@@ -44,18 +44,18 @@ export function PurchasingWorkflows({data,ext,update,notify}:Props){
  <Section title="Create purchase order"><form className="demo-workflow-form" onSubmit={create}>
   <Select label="Supplier" value={supplier} onChange={setSupplier}>{ext.suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Select>
   <Select label="Receiving branch" value={branch} onChange={setBranch}>{data.branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Select>
-  <Select label="Stock item" value={product} onChange={setProduct}>{data.products.filter(p=>p.kind!=='service').map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+  <Select label="Stock item" value={product} onChange={setProduct}>{data.products.filter(tracksStock).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select>
   <label className="demo-label">Order quantity<input type="number" min="1" step="1" value={qty} onChange={e=>setQty(e.target.value)}/></label>
   <label className="demo-label">Unit cost (PHP)<input type="number" min="0" step=".01" value={cost} onChange={e=>setCost(e.target.value)}/></label>
   <div className="demo-workflow-span"><Message error={error}/><button className="demo-btn primary"><Plus size={16}/> Create purchase order</button></div>
  </form></Section>
  <Section title="Purchase order receiving"><div className="demo-table-scroll"><table className="demo-table"><thead><tr><th>Item</th><th>Supplier</th><th>Branch</th><th>Ordered</th><th>Received</th><th>Action</th></tr></thead><tbody>{ext.purchases.map(p=><tr key={p.id}><td>{data.products.find(x=>x.id===p.productId)?.name}</td><td>{ext.suppliers.find(x=>x.id===p.supplierId)?.name}</td><td>{data.branches.find(x=>x.id===p.branchId)?.name}</td><td>{p.ordered}</td><td>{p.received}</td><td><button className="demo-btn secondary" disabled={p.received===p.ordered} onClick={()=>receive(p.id)}><PackageCheck size={15}/> Receive</button></td></tr>)}{!ext.purchases.length&&<tr><td colSpan={6}>Create a purchase order to try partial receiving.</td></tr>}</tbody></table></div></Section></>;
 }
-export function MembershipWorkflows({data,ext,update,notify}:Props){
+export function MembershipWorkflows({data,ext,update,change,notify}:Props){
  const [tab,setTab]=useState<'members'|'customers'|'plans'>('members');
  const [name,setName]=useState(''),[email,setEmail]=useState(''),[plan,setPlan]=useState('plan1'),[customer,setCustomer]=useState('cus1'),[branch,setBranch]=useState('b1');
  const [start,setStart]=useState(localDay()),[expiry,setExpiry]=useState('default'),[custom,setCustom]=useState(''),[reason,setReason]=useState('Demo membership granted');
- const [product,setProduct]=useState('svc1'),[planName,setPlanName]=useState(''),[duration,setDuration]=useState('months:1');
+ const [planName,setPlanName]=useState(''),[duration,setDuration]=useState('months:1'),[planPrice,setPlanPrice]=useState('999'),[sellThroughPos,setSellThroughPos]=useState(true);
  const [error,setError]=useState('');
  const plans=ext.plans.filter(p=>p.active);
  function expiration(p:DemoServicePlan,first:string):string|null {
@@ -75,9 +75,26 @@ export function MembershipWorkflows({data,ext,update,notify}:Props){
  events:[...e.events,{id:newId(),at:new Date().toISOString(),kind:'renew',reason:'Manual demo renewal',expiresOn:end}]}:e)}));setError('');notify('Membership renewed in sample data.');}
  function cancel(id:string){const reason=window.prompt('Cancellation reason','Customer requested cancellation');if(!reason)return;update(old=>({...old,entitlements:old.entitlements.map(e=>e.id===id?{...e,status:'cancelled',
  events:[...e.events,{id:newId(),at:new Date().toISOString(),kind:'cancel',reason,expiresOn:e.expiresOn}]}:e)}));notify('Membership cancelled.');}
- function addPlan(e:React.FormEvent){e.preventDefault();if(!planName.trim()){setError('Plan name is required');return;}const [kind,value]=duration.split(':');update(old=>({...old,plans:[...old.plans,{id:newId(),productId:product,name:planName,durationKind:kind as DemoServicePlan['durationKind'],durationValue:value?Number(value):null,active:true}]}));setPlanName('');setError('');notify('Sample service plan created.');}
+ function addPlan(e:React.FormEvent){
+ e.preventDefault();
+ const cents=Math.round(Number(planPrice)*100);
+ if(!planName.trim()||!Number.isInteger(cents)||cents<=0){setError('Provide a plan name and positive selling price');return;}
+ const [kind,value]=duration.split(':');
+ const durationKind=kind as DemoServicePlan['durationKind'],durationValue=value?Number(value):null;
+ try{calendarExpiry(localDay(),durationKind,durationValue)}catch(err){setError((err as Error).message);return;}
+ const productId='mem-'+newId(),planId='plan-'+newId();
+ const title=planName.trim();
+ // A membership plan is the source of truth; its POS item is created automatically.
+ const item:DemoProduct={id:productId,name:title,category:'Memberships',price:cents,cost:0,
+  stock:0,reorder:0,emoji:'🎟️',active:true,kind:'service',itemType:'membership',
+  itemClass:'membership_plan',trackInventory:false};
+ const servicePlan:DemoServicePlan={id:planId,productId,name:title,durationKind,durationValue,active:true,sellThroughPos};
+ change(old=>({...old,products:[...old.products,item]}));
+ update(old=>({...old,plans:[...old.plans,servicePlan]}));
+ setPlanName('');setError('');notify(sellThroughPos?'Membership plan created and linked to POS.':'Membership plan created (POS sales disabled).');
+}
  const status=(e:DemoExtension['entitlements'][number])=>e.status==='cancelled'?'Cancelled':e.startsOn>localDay()?'Scheduled':e.expiresOn&&e.expiresOn<localDay()?'Expired':'Active';
- return <><Intro title="Customer services & memberships" text="Try gym subscriptions, dental service packages, custom expiry dates, non-expiring services and manual renewals. Membership actions are simulations, not real charges."/>
+ return <><Intro title="Customer services & memberships" text="Manage customer memberships and linked POS plans. Successful demo POS purchases automatically activate or renew customer entitlements; no real money is collected."/>
  <div className="demo-chips">{([['members','Memberships'],['customers','Customers'],['plans','Plans']] as const).map(([k,v])=><button key={k} className={tab===k?'active':''} onClick={()=>setTab(k)}>{v}</button>)}</div>
  {tab==='members'&&<><div className="demo-workflow-metrics">{['Active','Scheduled','Expired','Cancelled'].map(s=><div key={s} className="demo-workflow-stat"><small>{s}</small><strong>{ext.entitlements.filter(e=>status(e)===s).length}</strong></div>)}</div>
  <Section title="Issue customer membership"><form className="demo-workflow-form" onSubmit={grant}>
@@ -90,16 +107,16 @@ export function MembershipWorkflows({data,ext,update,notify}:Props){
   <label className="demo-label demo-workflow-span">Reason / external payment reference<input value={reason} onChange={e=>setReason(e.target.value)}/></label>
   <div className="demo-workflow-span"><Message error={error}/><button className="demo-btn primary"><Plus size={16}/> Issue membership</button></div>
  </form></Section>
- <Section title="Membership register"><div className="demo-table-scroll"><table className="demo-table"><thead><tr><th>Customer</th><th>Service</th><th>Start</th><th>Expires</th><th>Status</th><th>History & actions</th></tr></thead><tbody>{ext.entitlements.map(e=><tr key={e.id}><td>{ext.customers.find(x=>x.id===e.customerId)?.name}</td><td>{ext.plans.find(x=>x.id===e.planId)?.name}</td><td>{e.startsOn}</td><td>{short(e.expiresOn)}</td><td>{status(e)}</td><td><div className="demo-inline-form"><button className="demo-btn secondary" onClick={()=>window.alert(e.events.map(v=>v.kind+' · '+v.at.slice(0,10)+' · '+short(v.expiresOn)+' · '+v.reason).join('\n'))}>History ({e.events.length})</button>{e.status==='active'&&<><button className="demo-btn secondary" onClick={()=>renew(e.id)}><RefreshCw size={14}/> Renew</button><button className="demo-btn secondary" onClick={()=>cancel(e.id)}>Cancel</button></>}</div></td></tr>)}{!ext.entitlements.length&&<tr><td colSpan={6}>No memberships yet. Issue one above.</td></tr>}</tbody></table></div></Section></>}
+ <Section title="Membership register"><div className="demo-table-scroll"><table className="demo-table"><thead><tr><th>Customer</th><th>Service</th><th>Start</th><th>Expires</th><th>Status</th><th>History & actions</th></tr></thead><tbody>{ext.entitlements.map(e=><tr key={e.id}><td>{ext.customers.find(x=>x.id===e.customerId)?.name}</td><td>{ext.plans.find(x=>x.id===e.planId)?.name}</td><td>{e.startsOn}</td><td>{short(e.expiresOn)}</td><td>{status(e)}</td><td><div className="demo-inline-form"><button className="demo-btn secondary" onClick={()=>window.alert(e.events.map(v=>v.kind+' · '+v.at.slice(0,10)+' · '+short(v.expiresOn)+' · '+v.reason+(v.saleId?' · '+v.saleId:'')).join('\n'))}>History ({e.events.length})</button>{e.status==='active'&&<><button className="demo-btn secondary" onClick={()=>renew(e.id)}><RefreshCw size={14}/> Renew</button><button className="demo-btn secondary" onClick={()=>cancel(e.id)}>Cancel</button></>}</div></td></tr>)}{!ext.entitlements.length&&<tr><td colSpan={6}>No memberships yet. Issue one above.</td></tr>}</tbody></table></div></Section></>}
  {tab==='customers'&&<><Section title="Add customer"><form className="demo-workflow-form" onSubmit={e=>{e.preventDefault();if(!name.trim())return;update(old=>({...old,customers:[...old.customers,{id:newId(),name,email,phone:'',reference:'MEM-'+String(old.customers.length+1).padStart(3,'0')}]}));setName('');setEmail('');notify('Demo customer created.');}}>
   <label className="demo-label">Name<input value={name} onChange={e=>setName(e.target.value)}/></label><label className="demo-label">Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)}/></label><div className="demo-workflow-span"><button className="demo-btn primary">Add customer</button></div>
  </form></Section><Section title="Customers">{ext.customers.map(c=><p key={c.id}>{c.reference} · <b>{c.name}</b> · {c.email}</p>)}</Section></>}
  {tab==='plans'&&<><Section title="Define service plan"><form className="demo-workflow-form" onSubmit={addPlan}>
-  <Select label="Service product" value={product} onChange={setProduct}>{data.products.filter(p=>p.kind==='service').map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+  <label className="demo-label">POS selling price (PHP)<input type="number" min="0.01" step="0.01" required value={planPrice} onChange={e=>setPlanPrice(e.target.value)}/></label>
   <label className="demo-label">Plan title<input value={planName} onChange={e=>setPlanName(e.target.value)}/></label>
   <Select label="Default validity" value={duration} onChange={setDuration}>{options.filter(([k])=>k!=='custom').map(([k,v])=><option key={k} value={k}>{v}</option>)}</Select>
-  <div className="demo-workflow-span"><Message error={error}/><button className="demo-btn primary">Create plan</button></div>
- </form></Section><Section title="Service plans">{ext.plans.map(p=><p key={p.id}><b>{p.name}</b> · {p.durationKind==='none'?'No expiry':p.durationValue+' '+p.durationKind}</p>)}</Section></>}
+  <label className="demo-label"><span>POS availability</span><span className="demo-inline-form"><input type="checkbox" checked={sellThroughPos} onChange={e=>setSellThroughPos(e.target.checked)}/> Sell through POS</span></label><div className="demo-workflow-span"><Message error={error}/><button className="demo-btn primary">Create linked plan</button></div>
+ </form></Section><Section title="Service plans">{ext.plans.map(p=>{const item=data.products.find(i=>i.id===p.productId);return <div className="demo-plan-row" key={p.id}><div><b>{p.name}</b><small>{p.durationKind==='none'?'No expiry':p.durationValue+' '+p.durationKind} · {item?currency(item.price):'Unlinked item'}</small></div><button className="demo-btn secondary" onClick={()=>{update(old=>({...old,plans:old.plans.map(plan=>plan.id===p.id?{...plan,sellThroughPos:!plan.sellThroughPos}:plan)}));notify('POS availability updated.');}}>{p.sellThroughPos?'Selling in POS':'Enable POS sales'}</button></div>})}</Section></>}
  </>;
 }
 export function RegisterWorkflows({data,ext,actor,update,notify}:Props){
@@ -202,7 +219,7 @@ export function DemoFeatureGuide(){return <><Intro title="Feature walkthrough" t
  ['POS checkout','Build a cart, apply discounts, record a sample payment and view the receipt.'],
  ['Stock transfers','Move stock between branches and inspect recorded movements.'],
  ['Purchasing','Create purchase orders, receive goods partially and update inventory.'],
- ['Customer memberships','Define expiring/lifetime services, issue and renew entitlements.'],
+ ['Customer memberships','Create plans with linked POS items, sell to named customers and renew entitlements.'],
  ['QR & kitchen','Submit a table request, confirm simulated payment and progress the KDS.'],
  ['Register operations','Open registers, record cash movements and reconcile closing cash.'],
  ['Refunds & reporting','Review sales, record cash refunds and inspect the revenue impact.']
