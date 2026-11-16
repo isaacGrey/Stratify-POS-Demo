@@ -88,7 +88,7 @@ function App() {
     kitchen:<KitchenWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
     refunds:<RefundWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
     guide:<DemoFeatureGuide/>,
-    inventory:<Inventory data={data} ext={extension} updateExtension={updateExtension} change={change} notify={notify}/>,
+    inventory:<Inventory data={data} ext={extension} updateExtension={updateExtension} notify={notify}/>,
     orders:<Orders data={data}/>,
     reports:<Reports data={data}/>,
     staff:<Staff data={data} account={account} change={change} notify={notify}/>,
