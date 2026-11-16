@@ -7,7 +7,7 @@ export type DemoOrderType = 'takeout' | 'dine_in' | 'delivery';
 
 export interface DemoProduct {
   id: string; name: string; category: string; price: number; cost: number;
-  stock: number; reorder: number; emoji: string; active: boolean;
+  stock: number; reorder: number; emoji: string; active: boolean; kind?:DemoKind; sku?:string; barcode?:string;
 }
 export interface DemoBranch { id: string; name: string; location: string; active: boolean; }
 export interface DemoSaleLine { productId: string; name: string; price: number; qty: number; }
@@ -48,7 +48,10 @@ const seedProducts: DemoProduct[] = [
   { id:'p9',name:'Vanilla Cold Brew',category:'Coffee',price:18500,cost:7200,stock:13,reorder:8,emoji:'🥛',active:true },
   { id:'p10',name:'Ham & Cheese Sandwich',category:'Food',price:22500,cost:10200,stock:12,reorder:5,emoji:'🥪',active:true },
   { id:'p11',name:'Classic Hot Chocolate',category:'Tea & Matcha',price:15500,cost:6200,stock:24,reorder:8,emoji:'🍫',active:true },
-  { id:'p12',name:'Chicken Pesto Panini',category:'Food',price:26500,cost:13300,stock:6,reorder:6,emoji:'🥙',active:true }
+  { id:'p12',name:'Chicken Pesto Panini',category:'Food',price:26500,cost:13300,stock:6,reorder:6,emoji:'🥙',active:true },
+  { id:'svc1',name:'Gym Monthly Membership',category:'Services',price:149900,cost:0,stock:0,reorder:0,emoji:'🏋️',active:true,kind:'service' },
+  { id:'svc2',name:'Dental Care Package',category:'Services',price:299900,cost:0,stock:0,reorder:0,emoji:'🦷',active:true,kind:'service' },
+  { id:'r1',name:'Motorcycle Engine Oil',category:'Retail',price:45000,cost:26000,stock:45,reorder:12,emoji:'🛢️',active:true,kind:'physical' }
 ];
 const seedBranches: DemoBranch[] = [
   {id:'b1',name:'BGC Flagship',location:'Bonifacio Global City, Taguig',active:true},
@@ -101,4 +104,77 @@ export function readDemoData(): DemoData {
 }
 export function writeDemoData(value: DemoData): void {
   try { localStorage.setItem(DEMO_STORAGE_KEY,JSON.stringify(value)); } catch { /* in-memory session still works */ }
+}
+
+// V2 extension keeps the original demo independently deployable while adding
+// branch-aware stock and commercial workflows. The records below are PUBLIC fixtures.
+export type DemoKind='food_beverage'|'physical'|'service'|'bundle'|'non_stock';
+export interface DemoMovement {id:string;date:string;productId:string;from:string|null;to:string|null;qty:number;kind:'transfer'|'adjustment'|'sale'|'receive'|'refund';reason:string}
+export interface DemoSupplier {id:string;name:string;contact:string}
+export interface DemoPurchase {id:string;date:string;branchId:string;supplierId:string;productId:string;ordered:number;received:number;cost:number}
+export interface DemoRegister {id:string;cashier:string;branchId:string;opening:number;movements:number;status:'open'|'closed';counted?:number;openedAt:string;closedAt?:string}
+export interface DemoRefund {id:string;orderId:string;date:string;amount:number;reason:string}
+export interface DemoHold {id:string;branchId:string;cashier:string;createdAt:string;items:{productId:string;qty:number}[]}
+export interface DemoServicePlan {id:string;productId:string;name:string;durationKind:'none'|'months'|'days';durationValue:number|null;active:boolean}
+export interface DemoCustomer {id:string;name:string;email:string;phone:string;reference:string}
+export interface DemoEntitlement {id:string;customerId:string;planId:string;branchId:string;startsOn:string;expiresOn:string|null;status:'active'|'cancelled';events:{id:string;at:string;kind:'grant'|'renew'|'cancel';reason:string;expiresOn:string|null}[]}
+export interface DemoQrRequest {id:string;branchId:string;table:string;items:{productId:string;qty:number}[];payment:DemoPayment;status:'awaiting_payment'|'confirmed'|'cancelled';createdAt:string;orderId?:string}
+export interface DemoKitchenTicket {id:string;orderId:string;branchId:string;status:'pending'|'preparing'|'ready'|'completed';updatedAt:string}
+export interface DemoExtension {
+ version:2;
+ balances:Record<string,Record<string,number>>;
+ movements:DemoMovement[];suppliers:DemoSupplier[];purchases:DemoPurchase[];
+ registers:DemoRegister[];refunds:DemoRefund[];holds:DemoHold[];
+ plans:DemoServicePlan[];customers:DemoCustomer[];entitlements:DemoEntitlement[];
+ requests:DemoQrRequest[];tickets:DemoKitchenTicket[];
+}
+export const EXTENSION_KEY='stratify-demo-workflows-v2';
+export const newId=()=>globalThis.crypto?.randomUUID?.()||'D-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+export function seedExtension(products:DemoProduct[]=seedProducts):DemoExtension {
+ const balances:Record<string,Record<string,number>>={b1:{},b2:{}};
+ for(const p of products){balances.b1[p.id]=Math.ceil(p.stock*.65);balances.b2[p.id]=p.stock-balances.b1[p.id];}
+ return {version:2,balances,movements:[],
+  suppliers:[{id:'sup1',name:'Demo Supply Co.',contact:'supplier@example.invalid'}],
+  purchases:[],registers:[],refunds:[],holds:[],
+  plans:[{id:'plan1',productId:'svc1',name:'Gym Monthly Membership',durationKind:'months',durationValue:1,active:true},
+         {id:'plan2',productId:'svc2',name:'Dental Care Package',durationKind:'none',durationValue:null,active:true}],
+  customers:[{id:'cus1',name:'Taylor Santos',email:'taylor@example.invalid',phone:'',reference:'MEM-001'}],
+  entitlements:[],requests:[],tickets:[]};
+}
+export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension {
+ try {
+  const value=JSON.parse(localStorage.getItem(EXTENSION_KEY)||'null');
+  if(value?.version===2&&value.balances&&Array.isArray(value.entitlements)&&Array.isArray(value.movements)) return value;
+ }catch{}
+ return seedExtension(products);
+}
+export function writeExtension(value:DemoExtension):void {
+ try{localStorage.setItem(EXTENSION_KEY,JSON.stringify(value));}catch{}
+}
+export function calendarExpiry(start:string,kind:DemoServicePlan['durationKind'],amount:number|null):string|null {
+ if(kind==='none')return null;
+ const d=new Date(start+'T00:00:00Z');
+ if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==start)throw Error('Invalid start date');
+ if(!Number.isInteger(amount)||!amount||amount<1)throw Error('Invalid duration');
+ if(kind==='days')d.setUTCDate(d.getUTCDate()+amount);
+ else {const day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+amount);
+ const last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();
+ d.setUTCDate(Math.min(day,last));}
+ return d.toISOString().slice(0,10);
+}
+export function transferDemoStock(state:DemoExtension,productId:string,from:string,to:string,qty:number,reason:string):DemoExtension {
+ if(!productId||!from||!to||from===to||!Number.isInteger(qty)||qty<=0)throw Error('Choose distinct locations and a positive whole-unit quantity');
+ const available=state.balances[from]?.[productId]??0;
+ if(available<qty)throw Error('Insufficient source-branch stock');
+ return {...state,balances:{...state.balances,
+  [from]:{...state.balances[from],[productId]:available-qty},
+  [to]:{...state.balances[to],[productId]:(state.balances[to]?.[productId]||0)+qty}},
+  movements:[{id:newId(),date:new Date().toISOString(),productId,from,to,qty,kind:'transfer',reason},...state.movements]};
+}
+export function refundDemoSale(ext:DemoExtension,sale:DemoSale,amount:number,reason:string):DemoExtension {
+ const prior=ext.refunds.filter(r=>r.orderId===sale.id).reduce((n,r)=>n+r.amount,0);
+ if(!Number.isInteger(amount)||amount<=0||amount>sale.total-prior)throw Error('Refund exceeds remaining paid amount');
+ if(!reason.trim())throw Error('Provide a refund reason');
+ if(sale.payment!=='cash')throw Error('Only cash refunds are simulated; external gateway refunds are unavailable');
+ return {...ext,refunds:[{id:newId(),orderId:sale.id,date:new Date().toISOString(),amount,reason},...ext.refunds]};
 }

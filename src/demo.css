@@ -3,3 +3,33 @@
 @media(max-width:1180px){.demo-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-pos-layout{grid-template-columns:minmax(0,1fr) 310px}.demo-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-metrics-three{grid-template-columns:repeat(3,minmax(0,1fr))}.demo-two-col{grid-template-columns:1fr}.demo-login-intro{padding:42px}.demo-login-brand{margin-bottom:35px}}
 @media(max-width:900px){.demo-sidebar{position:fixed;left:0;top:0;transform:translateX(-110%);transition:transform .2s}.demo-sidebar.open{transform:none}.demo-overlay{display:block;position:fixed;inset:0;z-index:29;background:#0005;border:0}.demo-menu-button,.demo-close-menu{display:grid;place-items:center;border:0;background:transparent;color:#654a38}.demo-menu-button{margin-right:12px}.demo-brand{position:relative}.demo-close-menu{margin-left:auto}.demo-content{padding:24px}.demo-topbar{padding:0 22px}.demo-login{grid-template-columns:1fr}.demo-login-intro{padding:30px;display:block}.demo-login-brand{margin-bottom:28px}.demo-login-intro h1{font-size:36px}.demo-preview,.demo-login-footer{display:none}.demo-login-right{padding:22px}.demo-login-card{width:100%;max-width:460px}}
 @media(max-width:650px){.demo-topbar{height:60px;padding:0 14px}.demo-date,.demo-topbar-user>div:last-child{display:none}.demo-content{padding:20px 13px}.demo-heading{align-items:flex-start;flex-direction:column}.demo-heading h1{font-size:26px}.demo-metrics,.demo-metrics-three,.demo-branch-grid{grid-template-columns:1fr 1fr;gap:10px}.demo-metric{padding:13px}.demo-metric>strong{font-size:20px}.demo-metric-icon{width:31px;height:31px}.demo-pos-layout{grid-template-columns:1fr}.demo-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-checkout{position:static}.demo-disclaimer{justify-content:space-between;padding:0 10px;font-size:8px;letter-spacing:.1px;gap:8px}.demo-disclaimer button{font-size:9px;white-space:nowrap}.demo-card-title{flex-wrap:wrap}.demo-toolbar{width:100%;flex-wrap:wrap}.demo-search-small{width:auto;flex:1}.demo-tip{align-items:flex-start;flex-direction:column}.demo-login-card{padding:22px}.demo-login-intro h1{font-size:32px}.demo-login-intro>p{font-size:12px}.demo-branch-grid{grid-template-columns:1fr}}
+
+/* Compact workflow modules: match the light StratifyPOS design system. */
+.demo-workflow-section{margin:0 0 15px;overflow:hidden}
+.demo-workflow-section>.demo-card-title{margin-bottom:12px}
+.demo-workflow-form{padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;align-items:end}
+.demo-workflow-form .demo-label{min-width:0;display:flex;flex-direction:column;gap:7px;font-size:11px;font-weight:700;color:#625e59}
+.demo-workflow-form .demo-label input,.demo-workflow-form .demo-label select{width:100%;min-width:0;border:1px solid #e5e4dd;border-radius:9px;background:#fff;color:#302a25;padding:11px 12px;min-height:40px}
+.demo-workflow-form .demo-label input:focus-visible,.demo-workflow-form .demo-label select:focus-visible{outline:2px solid #a47a5b;outline-offset:1px}
+.demo-workflow-span{grid-column:1/-1;display:flex;flex-direction:column;gap:9px;align-items:flex-start}
+.demo-workflow-span>.demo-btn{white-space:nowrap}
+.demo-workflow-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin:12px 0 18px}
+.demo-workflow-stat{border:1px solid #e9ece7;background:#fff;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:5px}
+.demo-workflow-stat small,.demo-workflow-stat span{color:#878178;font-size:11px}
+.demo-workflow-stat strong{font:700 25px Inter,sans-serif;color:#292822}
+.demo-workflow-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:12px;margin:14px 0}
+.demo-workflow-ticket{border:1px solid #e9ece7;background:#fff;border-radius:12px;padding:15px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.demo-workflow-ticket p{font-size:12px;color:#6e6e65;flex:1;margin:0;line-height:1.5}
+.demo-workflow-ticket .demo-btn{align-self:flex-start}
+.demo-workflow-ticket b{font-size:13px}
+.demo-inline-form{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.demo-inline-form input{border:1px solid #e5e4dd;border-radius:8px;padding:10px;min-height:39px;max-width:100%}
+.demo-inline-form .demo-btn{min-height:34px;padding:8px 12px;font-size:11px}
+.demo-pos-operations{margin:0 0 12px}
+.demo-muted{color:#78736e;font-size:12px}
+.demo-workflow-section .demo-table-scroll{overflow:auto}
+.demo-workflow-section .demo-table th,.demo-workflow-section .demo-table td{white-space:normal;min-width:75px;vertical-align:middle}
+.demo-workflow-section .demo-table th:first-child,.demo-workflow-section .demo-table td:first-child{min-width:115px}
+.demo-workflow-section .demo-pill{display:inline-flex;align-items:center;gap:5px}
+@media(max-width:750px){.demo-workflow-form{grid-template-columns:1fr 1fr;padding:12px}.demo-workflow-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-workflow-cards{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.demo-workflow-form,.demo-workflow-cards{grid-template-columns:1fr}.demo-workflow-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-workflow-stat{padding:11px}.demo-inline-form{gap:6px}.demo-workflow-section .demo-table{font-size:11px}}
