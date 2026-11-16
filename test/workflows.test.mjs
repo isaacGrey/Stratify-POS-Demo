@@ -297,3 +297,14 @@ test('full refund of renewal restores previous expiry and rejects reversing olde
  assert.equal(ext.entitlements[0].expiresOn,before);
  assert.equal(ext.entitlements[0].status,'active');
 });
+
+test('cashier demo navigation exposes memberships with read-only reception workflow',()=>{
+ const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
+ const service=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
+ assert(ui.includes("'kitchen','guide','memberships'"));
+ assert(service.includes("readonly=role==='cashier'"));
+ assert(service.includes("{!readonly&&<Section title=\"Issue customer membership\""));
+ assert(service.includes("{!readonly&&e.status==='active'"));
+ assert(service.includes("Reception lookup only"));
+ assert(service.includes("visibleEntitlements.map"));
+});

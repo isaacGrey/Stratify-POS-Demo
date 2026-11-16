@@ -64,7 +64,7 @@ function App() {
   const [branch,setBranch] = useState('b1');
   const account = demoAccounts.find(u=>u.email===email);
   const role = account?.role;
-  const permitted = (id:Page) => role!=='cashier'||['overview','pos','orders','staff','register','kitchen','guide'].includes(id);
+  const permitted = (id:Page) => role!=='cashier'||['overview','pos','orders','staff','register','kitchen','guide','memberships'].includes(id);
   function change(update: (old:DemoData)=>DemoData) {
     setData(previous=>{const next=update(previous);writeDemoData(next);return next;});
   }
