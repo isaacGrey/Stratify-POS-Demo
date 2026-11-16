@@ -174,7 +174,28 @@ export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension
         balances.b2[item.id]=item.stock-first;
       }
     }
-    return {...value,balances};
+    // Historic demo builds created kitchen tasks for all sale types.
+    // Keep sales, inventory, membership and other business data intact while
+    // migrating only invalid kitchen tickets out of the persisted queue.
+    const productById=new Map(products.map(p=>[p.id,p]));
+    const persistedSales=(()=>{
+      try {
+        const oldData=JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)||'null');
+        return Array.isArray(oldData?.orders)?oldData.orders:initialDemoData().orders;
+      }catch{return initialDemoData().orders;}
+    })() as DemoSale[];
+    const orderById=new Map(persistedSales.map(order=>[order.id,order]));
+    const legacyKitchenFoodCategories=new Set(['coffee','tea & matcha','pastries','food','beverages','drinks']);
+    const tickets=(Array.isArray(value.tickets)?value.tickets:[]).filter((ticket:DemoKitchenTicket)=>{
+      const sale=orderById.get(ticket.orderId);
+      if(!sale)return false;
+      return sale.lines.some(line=>{
+        const p=productById.get(line.productId);
+        return p && (p.kind==='food_beverage' ||
+          (!p.kind&&legacyKitchenFoodCategories.has(p.category.trim().toLowerCase())));
+      });
+    });
+    return {...value,balances,tickets};
   }
  }catch{}
  return seedExtension(products);

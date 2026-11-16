@@ -142,3 +142,65 @@ test('saved demo state upgrades catalog and stocks without discarding user chang
    assert.equal(inventory.balances.b1.svc5,0,'new service must not have physical stock');
  }finally{globalThis.localStorage=originalStorage;}
 });
+
+test('kitchen queue never exposes a saved gym membership ticket',async()=>{
+ const raw=readFileSync(new URL('../src/sale-flow.ts',import.meta.url),'utf8');
+ const transformed=transformSync(raw,{loader:'ts',format:'esm',target:'es2022'}).code;
+ const {kitchenLineItems,kitchenTicketView}=await import('data:text/javascript;base64,'+Buffer.from(transformed).toString('base64'));
+ const products=demo.initialDemoData().products;
+ const sale={id:'POS-1038',lines:[{productId:'svc1',name:'Gym Monthly Membership',qty:1}]};
+ const ticket={id:'legacy-1',orderId:sale.id,status:'pending'};
+ assert.deepEqual(kitchenLineItems(sale.lines,products),[]);
+ assert.deepEqual(kitchenTicketView([ticket],[sale],products),[]);
+});
+
+test('mixed carts show only food items to kitchen, not gym services or retail',async()=>{
+ const raw=readFileSync(new URL('../src/sale-flow.ts',import.meta.url),'utf8');
+ const transformed=transformSync(raw,{loader:'ts',format:'esm',target:'es2022'}).code;
+ const {kitchenTicketView}=await import('data:text/javascript;base64,'+Buffer.from(transformed).toString('base64'));
+ const products=demo.initialDemoData().products;
+ const order={id:'POS-1039',lines:[
+   {productId:'p1',name:'Spanish Latte',qty:2},
+   {productId:'svc1',name:'Gym Monthly Membership',qty:1},
+   {productId:'r1',name:'Motorcycle Engine Oil',qty:3}
+ ]};
+ const visible=kitchenTicketView([{id:'food-ticket',orderId:order.id}],[order],products);
+ assert.equal(visible.length,1);
+ assert.deepEqual(visible[0].lines.map(line=>line.productId),['p1']);
+ assert.deepEqual(kitchenTicketView([{id:'orphan',orderId:'missing'}],[order],products),[]);
+});
+
+test('reloading historic demo kitchen tickets removes only the invalid ones',()=>{
+ const seed=demo.initialDemoData();
+ const saved={...seed,orders:[
+   ...seed.orders,{...seed.orders[0],id:'POS-1038',type:'standard',
+       lines:[{productId:'svc1',name:'Gym Monthly Membership',price:149900,qty:1}]}]};
+ const ext=demo.seedExtension(saved.products);
+ ext.tickets=[
+   {id:'invalid-gym',orderId:'POS-1038',branchId:'b1',status:'pending',updatedAt:new Date().toISOString()},
+   {id:'valid-food',orderId:seed.orders[0].id,branchId:'b1',status:'pending',updatedAt:new Date().toISOString()},
+   {id:'missing-sale',orderId:'orphan',branchId:'b1',status:'pending',updatedAt:new Date().toISOString()}
+ ];
+ const memory=new Map([
+   [demo.DEMO_STORAGE_KEY,JSON.stringify(saved)],
+   [demo.EXTENSION_KEY,JSON.stringify(ext)]
+ ]);
+ const previousStorage=globalThis.localStorage;
+ globalThis.localStorage={getItem:key=>memory.get(key)||null,
+   setItem:(key,value)=>memory.set(key,value),removeItem:key=>memory.delete(key)};
+ try{
+   const freshData=demo.readDemoData();
+   const fresh=demo.readExtension(freshData.products);
+   assert.deepEqual(fresh.tickets.map(t=>t.id),['valid-food']);
+   assert.equal(freshData.orders.find(o=>o.id==='POS-1038').lines[0].name,'Gym Monthly Membership');
+   assert.equal(freshData.orders.length,saved.orders.length);
+ }finally{globalThis.localStorage=previousStorage;}
+});
+
+test('QR confirmation uses shared food routing rather than unconditional kitchen tickets',()=>{
+ const workflow=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
+ assert(workflow.includes('kitchenTicketView(ext.tickets,data.orders,data.products)'));
+ assert(workflow.includes("tickets:needsKitchenTicket(foodProducts)&&foodLines.length"));
+ assert(workflow.includes("type:saleOrderType(foodProducts,'dine_in')"));
+ assert(workflow.includes("data.products.filter(p=>p.active&&needsKitchenTicket([p]))"));
+});

@@ -12,7 +12,7 @@ import {
   type DemoSale, type DemoPayment, type DemoOrderType, type DemoSaleLine, type DemoKind
 } from './demo-data';
 import {WarehouseWorkflows,PurchasingWorkflows,MembershipWorkflows,RegisterWorkflows,KitchenWorkflows,QrWorkflows,RefundWorkflows,DemoFeatureGuide} from './workflows';
-import {usesFoodFulfillment,saleOrderType,needsKitchenTicket} from './sale-flow';
+import {usesFoodFulfillment,saleOrderType,needsKitchenTicket,kitchenLineItems} from './sale-flow';
 import './demo.css';
 
 type Page = 'overview'|'pos'|'products'|'inventory'|'warehouse'|'purchasing'|'memberships'|'register'|'qr'|'kitchen'|'refunds'|'guide'|'orders'|'reports'|'staff'|'branches'|'settings';
@@ -169,6 +169,7 @@ function PointOfSale({data,ext,updateExtension,role,branch,setBranch,change,noti
     updateExtension(old=>({ ...old,
       balances:{...old.balances,[branch]:Object.fromEntries(Object.entries(old.balances[branch]||{}).map(([id,stock])=>[id,stock-(lines.find(x=>x.product.id===id&&x.product.kind!=='service'&&x.product.kind!=='non_stock')?.row.qty||0)]))},
       movements:[...lines.filter(x=>x.product.kind!=='service'&&x.product.kind!=='non_stock').map(({row,product})=>({id:globalThis.crypto.randomUUID(),date:new Date().toISOString(),productId:product.id,from:branch,to:null,qty:row.qty,kind:'sale' as const,reason:'Checkout '+sale.id})),...old.movements],
+      // A ticket points at a sale, but the kitchen view filters it to food lines only.
       tickets:needsKitchenTicket(lines.map(x=>x.product))
         ? [{id:globalThis.crypto.randomUUID(),orderId:sale.id,branchId:branch,status:'pending' as const,updatedAt:new Date().toISOString()},...old.tickets]
         : old.tickets,
