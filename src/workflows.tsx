@@ -54,6 +54,7 @@ export function PurchasingWorkflows({data,ext,update,notify}:Props){
 export function MembershipWorkflows({data,ext,role,update,change,notify}:Props){
  const [tab,setTab]=useState<'members'|'customers'|'plans'>('members');
  const [lookup,setLookup]=useState('');
+ const [statusFilter,setStatusFilter]=useState('all'),[planFilter,setPlanFilter]=useState('all');
  const readonly=role==='cashier';
  const [name,setName]=useState(''),[email,setEmail]=useState(''),[plan,setPlan]=useState('plan1'),[customer,setCustomer]=useState('cus1'),[branch,setBranch]=useState('b1');
  const [start,setStart]=useState(localDay()),[expiry,setExpiry]=useState('default'),[custom,setCustom]=useState(''),[reason,setReason]=useState('Demo membership granted');
@@ -97,7 +98,13 @@ export function MembershipWorkflows({data,ext,role,update,change,notify}:Props){
  setPlanName('');setError('');notify(sellThroughPos?'Membership plan created and linked to POS.':'Membership plan created (POS sales disabled).');
 }
  const status=(e:DemoExtension['entitlements'][number])=>e.status==='cancelled'?'Cancelled':e.startsOn>localDay()?'Scheduled':e.expiresOn&&e.expiresOn<localDay()?'Expired':'Active';
- return <><Intro title="Customer services & memberships" text="Manage customer memberships and linked POS plans. Successful demo POS purchases automatically activate or renew customer entitlements; no real money is collected."/>
+ const filteredEntitlements=visibleEntitlements.filter(e=>(statusFilter==='all'||status(e).toLowerCase()===statusFilter)&&(planFilter==='all'||e.planId===planFilter));
+ return <><div className="demo-membership-header"><div className="demo-eyebrow">MEMBERSHIP MANAGEMENT</div><h1>Customer memberships</h1>
+ <p>Check customer validity, monitor renewals and manage linked POS plans. Demo purchases are simulated.</p></div>
+ <div className="demo-membership-summary">
+ {['Active','Scheduled','Expired','Cancelled'].map(s=><div key={s} className="demo-membership-kpi"><small>{s}</small>
+ <strong>{ext.entitlements.filter(e=>status(e)===s).length}</strong></div>)}
+ <div className="demo-membership-kpi"><small>Registered customers</small><strong>{ext.customers.length}</strong></div></div>
  {!readonly&&<div className="demo-chips">{([['members','Memberships'],['customers','Customers'],['plans','Plans']] as const).map(([k,v])=><button key={k} className={tab===k?'active':''} onClick={()=>setTab(k)}>{v}</button>)}</div>}
  {(readonly||tab==='members')&&<>{readonly&&<div className="demo-membership-picker"><label className="demo-label">Find customer membership by name, member reference or plan<input value={lookup} onChange={e=>setLookup(e.target.value)} placeholder="Search member name or ID"/></label><p>Reception lookup only. Cashiers cannot issue, renew, cancel or edit memberships.</p></div>}<div className="demo-workflow-metrics">{['Active','Scheduled','Expired','Cancelled'].map(s=><div key={s} className="demo-workflow-stat"><small>{s}</small><strong>{ext.entitlements.filter(e=>status(e)===s).length}</strong></div>)}</div>
  {!readonly&&<Section title="Issue customer membership"><form className="demo-workflow-form" onSubmit={grant}>
@@ -110,7 +117,13 @@ export function MembershipWorkflows({data,ext,role,update,change,notify}:Props){
   <label className="demo-label demo-workflow-span">Reason / external payment reference<input value={reason} onChange={e=>setReason(e.target.value)}/></label>
   <div className="demo-workflow-span"><Message error={error}/><button className="demo-btn primary"><Plus size={16}/> Issue membership</button></div>
  </form></Section>}
- <Section title="Membership register"><div className="demo-table-scroll"><table className="demo-table"><thead><tr><th>Customer</th><th>Service</th><th>Start</th><th>Expires</th><th>Status</th><th>History & actions</th></tr></thead><tbody>{visibleEntitlements.map(e=><tr key={e.id}><td>{ext.customers.find(x=>x.id===e.customerId)?.name}<small className="demo-item-kind">{ext.customers.find(x=>x.id===e.customerId)?.reference}</small></td><td>{ext.plans.find(x=>x.id===e.planId)?.name}</td><td>{e.startsOn}</td><td>{short(e.expiresOn)}</td><td>{status(e)}</td><td><div className="demo-inline-form"><button className="demo-btn secondary" onClick={()=>window.alert(e.events.map(v=>v.kind+' · '+v.at.slice(0,10)+' · '+short(v.expiresOn)+' · '+v.reason+(v.saleId?' · '+v.saleId:'')).join('\n'))}>History ({e.events.length})</button>{!readonly&&e.status==='active'&&<><button className="demo-btn secondary" onClick={()=>renew(e.id)}><RefreshCw size={14}/> Renew</button><button className="demo-btn secondary" onClick={()=>cancel(e.id)}>Cancel</button></>}</div></td></tr>)}{!ext.entitlements.length&&<tr><td colSpan={6}>No memberships yet. Issue one above.</td></tr>}</tbody></table></div></Section></>}
+ <Section title="Membership register"><div className="demo-membership-filters">
+ <input className="demo-input" aria-label="Search membership register" placeholder="Find member name, ID or plan" value={lookup} onChange={e=>setLookup(e.target.value)}/>
+ <select className="demo-input" aria-label="Filter membership status" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+ <option value="all">All statuses</option>{['active','scheduled','expired','cancelled'].map(s=><option key={s} value={s}>{s}</option>)}</select>
+ <select className="demo-input" aria-label="Filter membership plan" value={planFilter} onChange={e=>setPlanFilter(e.target.value)}>
+ <option value="all">All plans</option>{ext.plans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
+ </div><div className="demo-table-scroll"><table className="demo-table"><thead><tr><th>Customer</th><th>Service</th><th>Start</th><th>Expires</th><th>Status</th><th>History & actions</th></tr></thead><tbody>{filteredEntitlements.map(e=><tr key={e.id}><td>{ext.customers.find(x=>x.id===e.customerId)?.name}<small className="demo-item-kind">{ext.customers.find(x=>x.id===e.customerId)?.reference}</small></td><td>{ext.plans.find(x=>x.id===e.planId)?.name}</td><td>{e.startsOn}</td><td>{short(e.expiresOn)}</td><td>{status(e)}</td><td><div className="demo-inline-form"><button className="demo-btn secondary" onClick={()=>window.alert(e.events.map(v=>v.kind+' · '+v.at.slice(0,10)+' · '+short(v.expiresOn)+' · '+v.reason+(v.saleId?' · '+v.saleId:'')).join('\n'))}>History ({e.events.length})</button>{!readonly&&e.status==='active'&&<><button className="demo-btn secondary" onClick={()=>renew(e.id)}><RefreshCw size={14}/> Renew</button><button className="demo-btn secondary" onClick={()=>cancel(e.id)}>Cancel</button></>}</div></td></tr>)}{!filteredEntitlements.length&&<tr><td colSpan={6}>No matching memberships.</td></tr>}</tbody></table></div></Section></>}
  {!readonly&&tab==='customers'&&<><Section title="Add customer"><form className="demo-workflow-form" onSubmit={e=>{e.preventDefault();if(!name.trim())return;update(old=>({...old,customers:[...old.customers,{id:newId(),name,email,phone:'',reference:'MEM-'+String(old.customers.length+1).padStart(3,'0')}]}));setName('');setEmail('');notify('Demo customer created.');}}>
   <label className="demo-label">Name<input value={name} onChange={e=>setName(e.target.value)}/></label><label className="demo-label">Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)}/></label><div className="demo-workflow-span"><button className="demo-btn primary">Add customer</button></div>
  </form></Section><Section title="Customers">{ext.customers.map(c=><p key={c.id}>{c.reference} · <b>{c.name}</b> · {c.email}</p>)}</Section></>}

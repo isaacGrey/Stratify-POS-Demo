@@ -308,3 +308,60 @@ test('cashier demo navigation exposes memberships with read-only reception workf
  assert(service.includes("Reception lookup only"));
  assert(service.includes("visibleEntitlements.map"));
 });
+
+test('new browser demo data models are initialized and preserve compatibility',()=>{
+ const data=demo.initialDemoData(),extension=demo.seedExtension(data.products);
+ assert.equal(data.businessType,'food');
+ assert.equal(data.kitchenEnabled,true);
+ assert(extension.appointments.length>=2);
+ assert(extension.attendanceLog.length>=3);
+ assert(extension.platformNotifications.some(n=>!n.read));
+ assert(demo.demoAccounts.find(account=>account.role==='super_admin'));
+});
+test('appointment validator protects customer details and prevents conflicting resource bookings',()=>{
+ const state=demo.seedExtension(demo.initialDemoData().products);
+ const ref=state.appointments[0];
+ assert.doesNotThrow(()=>demo.validateDemoAppointment(state.appointments,ref));
+ const blocked={...ref,id:'new',start:new Date(Date.parse(ref.start)+600000).toISOString(),
+  end:new Date(Date.parse(ref.end)+600000).toISOString()};
+ assert.throws(()=>demo.validateDemoAppointment(state.appointments,blocked),/already has an appointment/);
+ assert.doesNotThrow(()=>demo.validateDemoAppointment(state.appointments,{...blocked,resourceName:'Room B'}));
+ assert.doesNotThrow(()=>demo.validateDemoAppointment(state.appointments,{...blocked,branchId:'b2'}));
+ for(const d of [{...blocked,end:blocked.start},{...blocked,customerName:''},
+  {...blocked,status:'unknown'},{...blocked,end:new Date(Date.parse(blocked.start)+90000000).toISOString()}]){
+  assert.throws(()=>demo.validateDemoAppointment(state.appointments,d));
+ }
+ assert.doesNotThrow(()=>demo.validateDemoAppointment(state.appointments,{...blocked,status:'cancelled'}));
+});
+test('genuine PDF/XLSX exports have expected file headers and well-formed ZIP central directory',async()=>{
+ const contents=readFileSync(new URL('../src/demo-exports.ts',import.meta.url),'utf8');
+ const encoded=transformSync(contents,{loader:'ts',format:'esm',target:'es2022'}).code;
+ const exports=await import('data:text/javascript;base64,'+Buffer.from(encoded).toString('base64'));
+ const rows=[['A',2],['B',3.5]];
+ const zip=exports.xlsxBytes(['Name','Quantity'],rows);
+ assert.equal(Buffer.from(zip.subarray(0,4)).toString('hex'),'504b0304');
+ assert(Buffer.from(zip).includes(Buffer.from('sheet1.xml')));
+ assert(Buffer.from(zip).includes(Buffer.from('Quantity')));
+ assert.equal(Buffer.from(zip.subarray(zip.length-22,zip.length-18)).toString('hex'),'504b0506');
+ const pdf=exports.pdfBytes('Stock report',['Name','Quantity'],rows);
+ assert.equal(Buffer.from(pdf.subarray(0,4)).toString(),'%PDF');
+ assert(Buffer.from(pdf).includes(Buffer.from('xref')));
+ assert(pdf.length>200);
+});
+test('new demo screens retain cashier access, kitchen restriction and simulated platform roles',()=>{
+ const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
+ const admin=readFileSync(new URL('../src/demo-admin.tsx',import.meta.url),'utf8');
+ const appts=readFileSync(new URL('../src/demo-appointments.tsx',import.meta.url),'utf8');
+ const work=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
+ assert(ui.includes("role==='super_admin'"));
+ assert(ui.includes("data.businessType==='non_food'||!data.kitchenEnabled"));
+ assert(ui.includes("'appointments'"));
+ assert(ui.includes('downloadDemoReport'));
+ assert(ui.includes('DemoNotificationBell'));
+ assert(admin.includes('Filter users by business'));
+ assert(admin.includes('Platform notifications'));
+ assert(appts.includes('validateDemoAppointment'));
+ assert(appts.includes('Calendar'));
+ assert(work.includes('demo-membership-summary'));
+ assert(work.includes("readonly=role==='cashier'"));
+});
