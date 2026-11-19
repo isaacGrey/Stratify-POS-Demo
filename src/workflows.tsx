@@ -54,13 +54,18 @@ export function PurchasingWorkflows({data,ext,update,notify}:Props){
 export function MembershipWorkflows({data,ext,role,update,change,notify}:Props){
  const [tab,setTab]=useState<'members'|'customers'|'plans'>('members');
  const [lookup,setLookup]=useState('');
+ const [statusFilter,setStatusFilter]=useState('all');
  const readonly=role==='cashier';
  const [name,setName]=useState(''),[email,setEmail]=useState(''),[plan,setPlan]=useState('plan1'),[customer,setCustomer]=useState('cus1'),[branch,setBranch]=useState('b1');
  const [start,setStart]=useState(localDay()),[expiry,setExpiry]=useState('default'),[custom,setCustom]=useState(''),[reason,setReason]=useState('Demo membership granted');
  const [planName,setPlanName]=useState(''),[duration,setDuration]=useState('months:1'),[planPrice,setPlanPrice]=useState('999'),[sellThroughPos,setSellThroughPos]=useState(true);
  const [error,setError]=useState('');
  const plans=ext.plans.filter(p=>p.active);
- const visibleEntitlements=ext.entitlements.filter(e=>{const c=ext.customers.find(x=>x.id===e.customerId),p=ext.plans.find(x=>x.id===e.planId);return (c?.name+' '+c?.reference+' '+p?.name).toLowerCase().includes(lookup.trim().toLowerCase());});
+ const visibleEntitlements=ext.entitlements.filter(e=>{
+  const c=ext.customers.find(x=>x.id===e.customerId),p=ext.plans.find(x=>x.id===e.planId);
+  return (c?.name+' '+c?.reference+' '+p?.name).toLowerCase().includes(lookup.trim().toLowerCase())&&
+    (statusFilter==='all'||status(e).toLowerCase()===statusFilter);
+ });
  function expiration(p:DemoServicePlan,first:string):string|null {
   if(expiry==='none')return null;
   if(expiry==='custom'){if(!custom||custom<first)throw Error('Choose an expiry date on or after the start');return custom;}
@@ -96,8 +101,17 @@ export function MembershipWorkflows({data,ext,role,update,change,notify}:Props){
  update(old=>({...old,plans:[...old.plans,servicePlan]}));
  setPlanName('');setError('');notify(sellThroughPos?'Membership plan created and linked to POS.':'Membership plan created (POS sales disabled).');
 }
- const status=(e:DemoExtension['entitlements'][number])=>e.status==='cancelled'?'Cancelled':e.startsOn>localDay()?'Scheduled':e.expiresOn&&e.expiresOn<localDay()?'Expired':'Active';
- return <><Intro title="Customer services & memberships" text="Manage customer memberships and linked POS plans. Successful demo POS purchases automatically activate or renew customer entitlements; no real money is collected."/>
+ function status(e:DemoExtension['entitlements'][number]){return e.status==='cancelled'?'Cancelled':e.startsOn>localDay()?'Scheduled':e.expiresOn&&e.expiresOn<localDay()?'Expired':'Active';}
+ return <><Intro title="Customer Memberships" text="View members, searchable status, expiry and visit readiness. Manage linked POS membership plans and customer records in one compact workspace."/>
+ <div className="demo-membership-controls"><label className="demo-label">Search customer, reference or plan
+  <input value={lookup} onChange={e=>setLookup(e.target.value)} placeholder="Search member code or name"/></label>
+  <label className="demo-label">Membership status
+   <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+    <option value="all">All statuses</option><option value="active">Active</option>
+    <option value="scheduled">Scheduled</option><option value="expired">Expired</option>
+    <option value="cancelled">Cancelled</option>
+   </select></label>
+ </div>
  {!readonly&&<div className="demo-chips">{([['members','Memberships'],['customers','Customers'],['plans','Plans']] as const).map(([k,v])=><button key={k} className={tab===k?'active':''} onClick={()=>setTab(k)}>{v}</button>)}</div>}
  {(readonly||tab==='members')&&<>{readonly&&<div className="demo-membership-picker"><label className="demo-label">Find customer membership by name, member reference or plan<input value={lookup} onChange={e=>setLookup(e.target.value)} placeholder="Search member name or ID"/></label><p>Reception lookup only. Cashiers cannot issue, renew, cancel or edit memberships.</p></div>}<div className="demo-workflow-metrics">{['Active','Scheduled','Expired','Cancelled'].map(s=><div key={s} className="demo-workflow-stat"><small>{s}</small><strong>{ext.entitlements.filter(e=>status(e)===s).length}</strong></div>)}</div>
  {!readonly&&<Section title="Issue customer membership"><form className="demo-workflow-form" onSubmit={grant}>

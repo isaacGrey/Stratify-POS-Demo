@@ -14,9 +14,10 @@ import {
 } from './demo-data';
 import {WarehouseWorkflows,PurchasingWorkflows,MembershipWorkflows,RegisterWorkflows,KitchenWorkflows,QrWorkflows,RefundWorkflows,DemoFeatureGuide} from './workflows';
 import {usesFoodFulfillment,saleOrderType,needsKitchenTicket,kitchenLineItems} from './sale-flow';
+import {DemoAppointments,DemoReportsPanel,DemoPlatformUsers,DemoNotifications} from './demo-new-features';
 import './demo.css';
 
-type Page = 'overview'|'pos'|'products'|'inventory'|'warehouse'|'purchasing'|'memberships'|'register'|'qr'|'kitchen'|'refunds'|'guide'|'orders'|'reports'|'staff'|'branches'|'settings';
+type Page = 'overview'|'pos'|'products'|'inventory'|'warehouse'|'purchasing'|'memberships'|'register'|'qr'|'kitchen'|'refunds'|'guide'|'orders'|'reports'|'staff'|'branches'|'settings'|'appointments'|'platform-users'|'platform-notifications';
 type Account = (typeof demoAccounts)[number];
 type CartLine = { productId: string; qty: number };
 const money = (amount: number) => new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:2}).format(amount/100);
@@ -31,6 +32,7 @@ const menuItems: {id:Page;label:string;icon:React.ComponentType<{size?:number}>}
   {id:'warehouse',label:'Stock & Transfers',icon:Store},
   {id:'purchasing',label:'Purchasing & Suppliers',icon:Package},
   {id:'memberships',label:'Customer Memberships',icon:CalendarDays},
+  {id:'appointments',label:'Appointment Scheduling',icon:CalendarDays},
   {id:'register',label:'Cash Registers',icon:Wallet},
   {id:'qr',label:'Customer QR Orders',icon:ShoppingCart},
   {id:'kitchen',label:'Kitchen Display',icon:ReceiptText},
@@ -40,7 +42,9 @@ const menuItems: {id:Page;label:string;icon:React.ComponentType<{size?:number}>}
   {id:'reports',label:'Reports & Analytics',icon:BarChart3},
   {id:'staff',label:'Team & Attendance',icon:Users},
   {id:'branches',label:'Branches & Locations',icon:Store},
-  {id:'settings',label:'Settings',icon:Settings}
+  {id:'settings',label:'Settings',icon:Settings},
+  {id:'platform-users',label:'Platform Users',icon:Users},
+  {id:'platform-notifications',label:'Platform Notifications',icon:AlertTriangle}
 ];
 function Pill({children,tone='normal'}:{children:React.ReactNode;tone?:string}) { return <span className={'demo-pill '+tone}>{children}</span>; }
 function Heading({eyebrow='WORKSPACE',title,description,actions}:{eyebrow?:string;title:string;description?:string;actions?:React.ReactNode}) {
@@ -64,7 +68,12 @@ function App() {
   const [branch,setBranch] = useState('b1');
   const account = demoAccounts.find(u=>u.email===email);
   const role = account?.role;
-  const permitted = (id:Page) => role!=='cashier'||['overview','pos','orders','staff','register','kitchen','guide','memberships'].includes(id);
+  const permitted = (id:Page) => {
+    if(role==='superadmin')return ['platform-users','platform-notifications','guide'].includes(id);
+    if(id==='platform-users'||id==='platform-notifications')return false;
+    if(id==='kitchen'&&(data.businessType==='non_food'||data.kitchenEnabled===false))return false;
+    return role!=='cashier'||['overview','pos','orders','staff','register','kitchen','guide','memberships','appointments'].includes(id);
+  };
   function change(update: (old:DemoData)=>DemoData) {
     setData(previous=>{const next=update(previous);writeDemoData(next);return next;});
   }
@@ -72,7 +81,12 @@ function App() {
   function notify(message:string){setToast(message);}
   useEffect(()=>{if(!toast)return;const timeout=window.setTimeout(()=>setToast(''),3500);return()=>window.clearTimeout(timeout);},[toast]);
   function reset() {const next=initialDemoData();const ext=seedExtension(next.products);setData(next);setExtension(ext);try{localStorage.removeItem(DEMO_STORAGE_KEY);localStorage.removeItem(EXTENSION_KEY);}catch{}setShowReset(false);notify('Sample data restored to its original state.');}
-  function login(next:Account) {setEmail(next.email);try{sessionStorage.setItem(DEMO_SESSION_KEY,next.email);}catch{}setPage('overview');notify('Welcome to the portfolio demonstration.');}
+  function login(next:Account,businessType?:'food'|'non_food') {
+    if(businessType&&next.role!=='superadmin')change(old=>({...old,businessType,kitchenEnabled:businessType==='food'}));
+    setEmail(next.email);try{sessionStorage.setItem(DEMO_SESSION_KEY,next.email);}catch{}
+    setPage(next.role==='superadmin'?'platform-users':'overview');
+    notify('Welcome to the portfolio demonstration.');
+  }
   function logout(){setEmail('');try{sessionStorage.removeItem(DEMO_SESSION_KEY);}catch{}setPage('overview');}
   function navigate(next:Page){if(!permitted(next))return;setPage(next);setMobile(false);}
   useEffect(()=>{document.title='StratifyPOS • Interactive Portfolio Demo';},[]);
@@ -84,7 +98,10 @@ function App() {
     products:<Products data={data} ext={extension} updateExtension={updateExtension} change={change} notify={notify}/>,
     warehouse:<WarehouseWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
     purchasing:<PurchasingWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
-    memberships:<MembershipWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
+    memberships:<MembershipWorkflows {...{data:data,ext:extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
+    appointments:<DemoAppointments data={data} ext={extension} update={updateExtension} notify={notify}/>,
+    'platform-users':<DemoPlatformUsers ext={extension} update={updateExtension} notify={notify}/>,
+    'platform-notifications':<DemoNotifications ext={extension} update={updateExtension}/>,
     register:<RegisterWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
     qr:<QrWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
     kitchen:<KitchenWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
@@ -93,7 +110,7 @@ function App() {
     inventory:<Inventory data={data} ext={extension} updateExtension={updateExtension} notify={notify}/>,
     orders:<Orders data={data}/>,
     reports:<Reports data={data}/>,
-    staff:<Staff data={data} account={account} change={change} notify={notify}/>,
+    staff:<Staff data={data} ext={extension} updateExtension={updateExtension} account={account} change={change} notify={notify}/>,
     branches:<Branches data={data}/>,
     settings:<SettingsPage data={data} change={change} reset={()=>setShowReset(true)}/>
   })[page];
@@ -101,27 +118,39 @@ function App() {
     {mobile&&<button className="demo-overlay" aria-label="Close menu" onClick={()=>setMobile(false)}/>}
     <aside className={'demo-sidebar '+(mobile?'open':'')}>
       <div className="demo-brand"><img src="/stratify-logo.png" alt=""/><div><strong>Stratify<span>POS</span></strong><small>SMART BUSINESS MANAGEMENT</small></div><button className="demo-close-menu" onClick={()=>setMobile(false)} aria-label="Close"><X size={19}/></button></div>
-      <div className="demo-workspace"><span className="demo-workspace-icon"><Store size={20}/></span><div><small>DEMO WORKSPACE</small><strong>Stratify Demo Business</strong><span>Sample business account</span></div></div>
+      <div className="demo-workspace"><span className="demo-workspace-icon"><Store size={20}/></span>
+       <div><small>{role==='superadmin'?'PLATFORM':'DEMO WORKSPACE'}</small>
+        <strong>{role==='superadmin'?'Platform Administration':'Stratify Demo Business'}</strong>
+        <span>{role==='superadmin'?'Super Admin · Simulated':'Sample business account'}</span></div></div>
       <p className="demo-nav-caption">WORKSPACE</p>
       <nav aria-label="Demo navigation">{visible.map(({id,label,icon:Icon})=><button type="button" key={id} className={'demo-nav '+(page===id?'active':'')} onClick={()=>navigate(id)}><Icon size={19}/>{label}{page===id&&<span className="demo-nav-dot"/>}</button>)}</nav>
       <div className="demo-sidebar-bottom"><div className="demo-sidebar-note"><b><ShieldCheck size={16}/> Demo environment</b><p>All transactions are simulated. Changes are stored only in this browser.</p></div><button className="demo-nav" onClick={logout}><LogOut size={19}/> Sign out</button></div>
     </aside>
     <div className="demo-main">
       <div className="demo-disclaimer"><span><ShieldCheck size={15}/> PORTFOLIO DEMO — SIMULATED DATA ONLY</span><button onClick={()=>setShowReset(true)}><RotateCcw size={14}/> Reset demo</button></div>
-      <header className="demo-topbar"><div className="demo-topbar-left"><button className="demo-menu-button" onClick={()=>setMobile(true)} aria-label="Open menu"><Menu size={22}/></button><span>Workspace <b>/</b> {menuItems.find(item=>item.id===page)?.label}</span></div><div className="demo-topbar-user"><span className="demo-date"><CalendarDays size={16}/> {new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</span><div className="demo-avatar">{account.name[0]}</div><div><strong>{account.name}</strong><small>{role?.charAt(0).toUpperCase()+role!.slice(1)} · Demo</small></div></div></header>
+      <header className="demo-topbar"><div className="demo-topbar-left"><button className="demo-menu-button" onClick={()=>setMobile(true)} aria-label="Open menu"><Menu size={22}/></button><span>Workspace <b>/</b> {menuItems.find(item=>item.id===page)?.label}</span></div><div className="demo-topbar-user">{role==='superadmin'&&<DemoNotifications ext={extension} update={updateExtension} compact/>}<span className="demo-date"><CalendarDays size={16}/> {new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</span><div className="demo-avatar">{account.name[0]}</div><div><strong>{account.name}</strong><small>{role?.charAt(0).toUpperCase()+role!.slice(1)} · Demo</small></div></div></header>
       <main className="demo-content">{content}<footer className="demo-footer">StratifyPOS portfolio demonstration · No real orders, payments, or financial records.</footer></main>
     </div>
     {toast&&<div className="demo-toast" role="status"><Check size={16}/>{toast}</div>}
     {showReset&&<div className="demo-modal-backdrop" onMouseDown={()=>setShowReset(false)}><div className="demo-modal" role="dialog" aria-modal="true" aria-label="Reset demo" onMouseDown={e=>e.stopPropagation()}><h2>Reset demo workspace?</h2><p>All changes made in this browser—including checkouts, memberships, purchasing, transfers and QR orders—will be replaced with the original sample data.</p><div className="demo-actions"><button className="demo-btn secondary" onClick={()=>setShowReset(false)}>Cancel</button><button className="demo-btn primary" onClick={reset}><RotateCcw size={16}/> Reset sample data</button></div></div></div>}
   </div>;
 }
-function Login({onLogin}:{onLogin:(account:Account)=>void}) {
+function Login({onLogin}:{onLogin:(account:Account,businessType?:'food'|'non_food')=>void}) {
   const [selected,setSelected]=useState(demoAccounts[0].email);
   const [password,setPassword]=useState(DEMO_PASSWORD);
+  const [businessType,setBusinessType]=useState<'food'|'non_food'>('food');
   const [error,setError]=useState('');
-  function submit(event:React.FormEvent){event.preventDefault();const account=demoAccounts.find(a=>a.email===selected);if(!account||password!==DEMO_PASSWORD){setError('Use the demo password shown below.');return;}onLogin(account);}
+  function submit(event:React.FormEvent){event.preventDefault();const account=demoAccounts.find(a=>a.email===selected);if(!account||password!==DEMO_PASSWORD){setError('Use the demo password shown below.');return;}onLogin(account,account.role==='superadmin'?undefined:businessType);}
   return <div className="demo-login"><div className="demo-login-intro"><div className="demo-login-brand"><img src="/stratify-logo.png" alt=""/><strong>Stratify<span>POS</span></strong></div><div className="demo-login-eyebrow"><span className="demo-live-dot"/> INTERACTIVE PORTFOLIO SHOWCASE</div><h1>Your business.<br/>One smarter workspace<span>.</span></h1><p>Explore a multi-industry POS: try checkout, stock transfers, purchasing, memberships, customer QR orders, kitchen tickets and reporting.</p><div className="demo-preview"><div className="demo-preview-label"><span>THE EXPERIENCE</span><Pill tone="green">Explore freely</Pill></div><img src="/previews/dashboard.png" alt="Screenshot of the StratifyPOS dashboard"/></div><div className="demo-login-footer">Built as a demonstration of SaaS POS workflows, frontend engineering, and business systems.</div></div>
-    <div className="demo-login-right"><div className="demo-login-card"><Pill tone="amber"><ShieldCheck size={13}/> PUBLIC DEMO — NO REAL DATA</Pill><h2>Explore StratifyPOS</h2><p className="demo-muted">Choose a sample account to see the system from different roles. No registration required.</p><div className="demo-role-picker">{demoAccounts.map(a=><button type="button" onClick={()=>{setSelected(a.email);setPassword(DEMO_PASSWORD);setError('');}} className={'demo-role '+(selected===a.email?'selected':'')} key={a.email}><div className="demo-role-avatar">{a.name[0]}</div><div><strong>{a.role[0].toUpperCase()+a.role.slice(1)}</strong><small>{a.description}</small></div><span className="demo-role-check">{selected===a.email?<Check size={15}/>:null}</span></button>)}</div><form onSubmit={submit}><label className="demo-label">Demo email<input readOnly value={selected}/></label><label className="demo-label">Demo password<input value={password} onChange={e=>setPassword(e.target.value)} type="text" autoComplete="off"/></label>{error&&<div className="demo-error" role="alert">{error}</div>}<button className="demo-btn primary demo-sign-in" type="submit">Enter demo workspace <ArrowRight size={18}/></button></form><div className="demo-credentials"><span>Shared demo password</span><code>{DEMO_PASSWORD}</code><span>· Sample accounts only</span></div><div className="demo-safe-note"><ShieldCheck size={18}/><p>No backend connection. No actual payment processing. Your changes are saved locally and can be reset at any time.</p></div></div></div>
+    <div className="demo-login-right"><div className="demo-login-card"><Pill tone="amber"><ShieldCheck size={13}/> PUBLIC DEMO — NO REAL DATA</Pill><h2>Explore StratifyPOS</h2><p className="demo-muted">Choose a sample account to see the system from different roles. No registration required.</p><div className="demo-role-picker">{demoAccounts.map(a=><button type="button" onClick={()=>{setSelected(a.email);setPassword(DEMO_PASSWORD);setError('');}} className={'demo-role '+(selected===a.email?'selected':'')} key={a.email}><div className="demo-role-avatar">{a.name[0]}</div><div><strong>{a.role[0].toUpperCase()+a.role.slice(1)}</strong><small>{a.description}</small></div><span className="demo-role-check">{selected===a.email?<Check size={15}/>:null}</span></button>)}</div><form onSubmit={submit}>
+       {selected!=='admin@demo.stratifypos.app'&&<label className="demo-label">
+        Business type (simulated signup)
+        <select value={businessType} onChange={e=>setBusinessType(e.target.value as 'food'|'non_food')}>
+         <option value="food">Food-related / restaurant / café</option>
+         <option value="non_food">Retail / gym / clinic / non-food</option>
+        </select>
+       </label>}
+       <label className="demo-label">Demo email<input readOnly value={selected}/></label><label className="demo-label">Demo password<input value={password} onChange={e=>setPassword(e.target.value)} type="text" autoComplete="off"/></label>{error&&<div className="demo-error" role="alert">{error}</div>}<button className="demo-btn primary demo-sign-in" type="submit">Enter demo workspace <ArrowRight size={18}/></button></form><div className="demo-credentials"><span>Shared demo password</span><code>{DEMO_PASSWORD}</code><span>· Sample accounts only</span></div><div className="demo-safe-note"><ShieldCheck size={18}/><p>No backend connection. No actual payment processing. Your changes are saved locally and can be reset at any time.</p></div></div></div>
   </div>;
 }
 function Dashboard({data,ext,open}:{data:DemoData;ext:DemoExtension;open:(page:Page)=>void}) {
@@ -253,6 +282,7 @@ function Inventory({data,ext,updateExtension,notify}:{data:DemoData;ext:DemoExte
  <div className="demo-metrics demo-metrics-three"><Metric label="Stock items" value={String(physical.length)} icon={Package} tone="sage" detail="Monitored physical catalog"/>
  <Metric label="Low stock alerts" value={String(low)} icon={AlertTriangle} tone="sand" detail="At or below reorder point"/>
  <Metric label="Total units on hand" value={String(total)} icon={Store} tone="peach" detail="For selected branch"/></div>
+ <DemoReportsPanel data={data} ext={ext} update={updateExtension} notify={notify} kind="inventory"/>
  <Card title="Branch stock balances"><Table heads={['Item','Category','On hand','Reorder at','Status','Action']}>{physical.map(p=><tr key={p.id}><td><span className="demo-table-emoji">{p.emoji}</span><b>{p.name}</b></td><td>{p.category}</td><td>{balance(p)}</td><td>{p.reorder}</td><td><Pill tone={balance(p)<=p.reorder?'amber':'green'}>{balance(p)<=p.reorder?'Low stock':'Healthy'}</Pill></td><td><button className="demo-link" onClick={()=>{setSelected(p);setAmount('10');setDirection('in');}}>Adjust stock</button></td></tr>)}</Table></Card>
  {selected&&<div className="demo-modal-backdrop" onMouseDown={()=>setSelected(null)}><div className="demo-modal" role="dialog" aria-modal="true" aria-label="Stock adjustment" onMouseDown={e=>e.stopPropagation()}><h2>Adjust branch stock</h2>
  <p>{selected.emoji} {selected.name} · {balance(selected)} at {data.branches.find(b=>b.id===branch)?.name}</p>
@@ -275,15 +305,32 @@ function Reports({data}:{data:DemoData}) {
   function exportCsv(){const rows=[['Order','Date','Branch','Payment','Total PHP'],...data.orders.map(o=>[o.id,o.date,data.branches.find(b=>b.id===o.branchId)?.name||'',o.payment,String(o.total/100)])];const csv=rows.map(row=>row.map(cell=>'"'+String(cell).replace(/"/g,'""')+'"').join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const link=document.createElement('a');const url=URL.createObjectURL(blob);link.href=url;link.download='stratifypos-demo-sales.csv';link.click();URL.revokeObjectURL(url);}
   return <><Heading title="Reports & analytics" description="Synthetic business performance and sales insights." actions={<button className="demo-btn secondary" onClick={exportCsv}><Download size={16}/> Export demo CSV</button>}/><div className="demo-metrics demo-metrics-three"><Metric label="Total revenue" value={money(revenue)} icon={TrendingUp} detail="Sample sales, all dates"/><Metric label="Transactions" value={String(data.orders.length)} icon={ReceiptText} detail="Completed demo orders" tone="sage"/><Metric label="Average order" value={money(data.orders.length?Math.round(revenue/data.orders.length):0)} icon={Wallet} detail="Per sample transaction" tone="peach"/></div><div className="demo-two-col"><Card title="Revenue by product"><div className="demo-bars">{ranked.slice(0,7).map(([name,row])=><div className="demo-bar-row" key={name}><div><span>{name}</span><b>{money(row.total)}</b></div><div className="demo-track"><span style={{width:String(row.total/max*100)+'%'}}/></div></div>)}</div></Card><Card title="Sales by payment method"><div className="demo-payment-summary">{(['cash','gcash','maya','card'] as DemoPayment[]).map(p=>{const orders=data.orders.filter(o=>o.payment===p);return <div key={p}><span>{p.toUpperCase()}</span><strong>{money(orders.reduce((n,o)=>n+o.total,0))}</strong><small>{orders.length} orders</small></div>;})}</div></Card></div><Card title="Top selling products"><Table heads={['Product','Units sold','Gross sales']}>{ranked.map(([name,row])=><tr key={name}><td><b>{name}</b></td><td>{row.count}</td><td>{money(row.total)}</td></tr>)}</Table></Card></>;
 }
-function Staff({data,account,change,notify}:{data:DemoData;account:Account;change:(fn:(d:DemoData)=>DemoData)=>void;notify:(s:string)=>void}) {
+function Staff({data,ext,updateExtension,account,change,notify}:{data:DemoData;ext:DemoExtension;updateExtension:(fn:(e:DemoExtension)=>DemoExtension)=>void;account:Account;change:(fn:(d:DemoData)=>DemoData)=>void;notify:(s:string)=>void}) {
   const isCashier=account.role==='cashier';const person=data.staff.find(p=>p.name===account.name);
-  function toggle(){if(!person)return;change(old=>({...old,staff:old.staff.map(s=>s.id===person.id?{...s,shiftStart:s.shiftStart?null:today()}:s)}));notify(person.shiftStart?'Shift ended.':'Shift started.');}
-  return <><Heading title="Team & attendance" description="Explore sample team roles and a local shift check-in workflow."/><Card title="My attendance"><div className="demo-attendance"><div><Clock3 size={25}/><div><strong>{person?.shiftStart?'Clocked in':'Not currently clocked in'}</strong><p>{person?.shiftStart?'Since '+dateFmt(person.shiftStart):'You can simulate starting a shift.'}</p></div></div><button className="demo-btn primary" onClick={toggle}>{person?.shiftStart?'Clock out':'Clock in'}</button></div></Card>{!isCashier&&<Card title="Team directory"><Table heads={['Employee','Role','Assigned branch','Shift status']}>{data.staff.map(s=><tr key={s.id}><td><b>{s.name}</b></td><td className="capitalize">{s.role}</td><td>{data.branches.find(b=>b.id===s.branchId)?.name}</td><td><Pill tone={s.shiftStart?'green':'muted'}>{s.shiftStart?'Clocked in':'Not active'}</Pill></td></tr>)}</Table></Card>}</>;
+  function toggle(){if(!person)return;
+   const stamp=today();
+   change(old=>({...old,staff:old.staff.map(s=>s.id===person.id?{...s,shiftStart:s.shiftStart?null:stamp}:s)}));
+   updateExtension(old=>person.shiftStart?{...old,attendanceRecords:old.attendanceRecords.map(a=>
+     a.staffId===person.id&&a.endsAt===null?{...a,endsAt:stamp}:a)}:
+     {...old,attendanceRecords:[{id:newId(),staffId:person.id,branchId:person.branchId,
+       startsAt:stamp,endsAt:null,breakMinutes:0},...old.attendanceRecords]});
+   notify(person.shiftStart?'Shift ended.':'Shift started.');
+  }
+  return <><Heading title="Team & attendance" description="Explore sample team roles and a local shift check-in workflow."/><Card title="My attendance"><div className="demo-attendance"><div><Clock3 size={25}/><div><strong>{person?.shiftStart?'Clocked in':'Not currently clocked in'}</strong><p>{person?.shiftStart?'Since '+dateFmt(person.shiftStart):'You can simulate starting a shift.'}</p></div></div><button className="demo-btn primary" onClick={toggle}>{person?.shiftStart?'Clock out':'Clock in'}</button></div></Card>{!isCashier&&<DemoReportsPanel data={data} ext={ext} update={updateExtension} notify={notify} kind="attendance"/>}{!isCashier&&<Card title="Team directory"><Table heads={['Employee','Role','Assigned branch','Shift status']}>{data.staff.map(s=><tr key={s.id}><td><b>{s.name}</b></td><td className="capitalize">{s.role}</td><td>{data.branches.find(b=>b.id===s.branchId)?.name}</td><td><Pill tone={s.shiftStart?'green':'muted'}>{s.shiftStart?'Clocked in':'Not active'}</Pill></td></tr>)}</Table></Card>}</>;
 }
 function Branches({data}:{data:DemoData}) {return <><Heading title="Branches & locations" description="Sample business locations used throughout the demo."/><div className="demo-branch-grid">{data.branches.map(b=><Card key={b.id} title={b.name} right={<Pill tone="green">Active</Pill>}><div className="demo-branch-card"><Store size={30}/><p>{b.location}</p><p><b>{data.orders.filter(o=>o.branchId===b.id).length}</b> demo transactions</p><small>Sample location — no live store connection</small></div></Card>)}</div></>;}
 function SettingsPage({data,change,reset}:{data:DemoData;change:(fn:(d:DemoData)=>DemoData)=>void;reset:()=>void}) {
   const [tax,setTax]=useState(String(data.taxRate));const [service,setService]=useState(String(data.serviceRate));const [footer,setFooter]=useState(data.footer);
-  function save(e:React.FormEvent){e.preventDefault();const t=Number(tax),s=Number(service);if(![t,s].every(v=>Number.isFinite(v)&&v>=0&&v<=30))return;change(old=>({...old,taxRate:t,serviceRate:s,footer}));}
-  return <><Heading title="Settings" description="Configure simulated checkout calculations and reset sample data."/><div className="demo-two-col"><Card title="Checkout settings"><form className="demo-settings-form" onSubmit={save}><label className="demo-label">Tax rate (%)<input type="number" min="0" max="30" step=".01" value={tax} onChange={e=>setTax(e.target.value)}/></label><label className="demo-label">Service rate (%)<input type="number" min="0" max="30" step=".01" value={service} onChange={e=>setService(e.target.value)}/></label><label className="demo-label">Receipt footer<textarea rows={3} value={footer} onChange={e=>setFooter(e.target.value)}/></label><button className="demo-btn primary">Save demo settings</button></form></Card><Card title="Demo environment"><div className="demo-environment"><ShieldCheck size={28}/><h3>Safe to explore</h3><p>This portfolio build is browser-only. It has no real authentication backend, no payment gateway, and no access to production tenant data.</p><p>State persists in this browser until you reset it or clear local storage.</p><button className="demo-btn secondary" onClick={reset}><RotateCcw size={15}/> Restore original demo data</button></div></Card></div></>;
+  const [businessType,setBusinessType]=useState<'food'|'non_food'>(data.businessType||'food');
+  const [kitchenEnabled,setKitchenEnabled]=useState(data.kitchenEnabled??true);
+  function save(e:React.FormEvent){e.preventDefault();const t=Number(tax),s=Number(service);if(![t,s].every(v=>Number.isFinite(v)&&v>=0&&v<=30))return;change(old=>({...old,taxRate:t,serviceRate:s,footer,businessType,kitchenEnabled:businessType==='food'&&kitchenEnabled}));}
+  return <><Heading title="Settings" description="Configure simulated checkout calculations and reset sample data."/><div className="demo-two-col"><Card title="Checkout settings"><form className="demo-settings-form" onSubmit={save}>
+    <label className="demo-label">Business type<select value={businessType} onChange={e=>{
+       const v=e.target.value as 'food'|'non_food';setBusinessType(v);setKitchenEnabled(v==='food');
+     }}><option value="food">Food-related / restaurant / café</option>
+     <option value="non_food">Retail / gym / clinic / other</option></select></label>
+    {businessType==='food'?<label className="demo-checkbox">
+      <input type="checkbox" checked={kitchenEnabled} onChange={e=>setKitchenEnabled(e.target.checked)}/>
+      Enable Kitchen Display</label>:<p className="demo-ops-hint">Kitchen Display is disabled for non-food businesses.</p><label className="demo-label">Tax rate (%)<input type="number" min="0" max="30" step=".01" value={tax} onChange={e=>setTax(e.target.value)}/></label><label className="demo-label">Service rate (%)<input type="number" min="0" max="30" step=".01" value={service} onChange={e=>setService(e.target.value)}/></label><label className="demo-label">Receipt footer<textarea rows={3} value={footer} onChange={e=>setFooter(e.target.value)}/></label><button className="demo-btn primary">Save demo settings</button></form></Card><Card title="Demo environment"><div className="demo-environment"><ShieldCheck size={28}/><h3>Safe to explore</h3><p>This portfolio build is browser-only. It has no real authentication backend, no payment gateway, and no access to production tenant data.</p><p>State persists in this browser until you reset it or clear local storage.</p><button className="demo-btn secondary" onClick={reset}><RotateCcw size={15}/> Restore original demo data</button></div></Card></div></>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);
