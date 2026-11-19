@@ -200,7 +200,7 @@ test('reloading historic demo kitchen tickets removes only the invalid ones',()=
 test('QR confirmation uses shared food routing rather than unconditional kitchen tickets',()=>{
  const workflow=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
  assert(workflow.includes('kitchenTicketView(ext.tickets,data.orders,data.products)'));
- assert(workflow.includes("tickets:needsKitchenTicket(foodProducts)&&foodLines.length"));
+ assert(workflow.includes("data.businessType==='food'&&data.kitchenEnabled&&needsKitchenTicket(foodProducts)&&foodLines.length"));
  assert(workflow.includes("type:saleOrderType(foodProducts,'dine_in')"));
  assert(workflow.includes("data.products.filter(p=>p.active&&needsKitchenTicket([p]))"));
 });
