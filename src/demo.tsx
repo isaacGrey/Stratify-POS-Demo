@@ -14,9 +14,12 @@ import {
 } from './demo-data';
 import {WarehouseWorkflows,PurchasingWorkflows,MembershipWorkflows,RegisterWorkflows,KitchenWorkflows,QrWorkflows,RefundWorkflows,DemoFeatureGuide} from './workflows';
 import {usesFoodFulfillment,saleOrderType,needsKitchenTicket,kitchenLineItems} from './sale-flow';
+import {DemoAppointments} from './demo-appointments';
+import {DemoPlatformUsers,DemoPlatformDashboard,DemoNotificationBell} from './demo-admin';
+import {downloadDemoReport} from './demo-exports';
 import './demo.css';
 
-type Page = 'overview'|'pos'|'products'|'inventory'|'warehouse'|'purchasing'|'memberships'|'register'|'qr'|'kitchen'|'refunds'|'guide'|'orders'|'reports'|'staff'|'branches'|'settings';
+type Page = 'overview'|'pos'|'products'|'inventory'|'warehouse'|'purchasing'|'memberships'|'register'|'qr'|'kitchen'|'refunds'|'guide'|'orders'|'reports'|'staff'|'branches'|'settings'|'appointments'|'platform_users';
 type Account = (typeof demoAccounts)[number];
 type CartLine = { productId: string; qty: number };
 const money = (amount: number) => new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:2}).format(amount/100);
@@ -31,6 +34,8 @@ const menuItems: {id:Page;label:string;icon:React.ComponentType<{size?:number}>}
   {id:'warehouse',label:'Stock & Transfers',icon:Store},
   {id:'purchasing',label:'Purchasing & Suppliers',icon:Package},
   {id:'memberships',label:'Customer Memberships',icon:CalendarDays},
+  {id:'appointments',label:'Appointment Scheduling',icon:CalendarDays},
+  {id:'platform_users',label:'Platform Users',icon:Users},
   {id:'register',label:'Cash Registers',icon:Wallet},
   {id:'qr',label:'Customer QR Orders',icon:ShoppingCart},
   {id:'kitchen',label:'Kitchen Display',icon:ReceiptText},
@@ -64,7 +69,12 @@ function App() {
   const [branch,setBranch] = useState('b1');
   const account = demoAccounts.find(u=>u.email===email);
   const role = account?.role;
-  const permitted = (id:Page) => role!=='cashier'||['overview','pos','orders','staff','register','kitchen','guide','memberships'].includes(id);
+  const permitted = (id:Page) => {
+   if(role==='super_admin')return ['overview','platform_users'].includes(id);
+   if(id==='platform_users')return false;
+   if(id==='kitchen'&&(data.businessType==='non_food'||!data.kitchenEnabled))return false;
+   return role!=='cashier'||['overview','pos','orders','staff','register','kitchen','guide','memberships','appointments'].includes(id);
+  };
   function change(update: (old:DemoData)=>DemoData) {
     setData(previous=>{const next=update(previous);writeDemoData(next);return next;});
   }
@@ -79,7 +89,9 @@ function App() {
   if(!account)return <Login onLogin={login}/>;
   const visible=menuItems.filter(item=>permitted(item.id));
   const content = ({
-    overview:<Dashboard data={data} ext={extension} open={navigate} />,
+    overview:role==='super_admin'?<DemoPlatformDashboard ext={extension}/>:<Dashboard data={data} ext={extension} open={navigate} />,
+    platform_users:<DemoPlatformUsers data={data}/>,
+    appointments:<DemoAppointments data={data} ext={extension} update={updateExtension} notify={notify}/>,
     pos:<PointOfSale data={data} ext={extension} updateExtension={updateExtension} role={role!} branch={branch} setBranch={setBranch} change={change} notify={notify} name={account.name} />,
     products:<Products data={data} ext={extension} updateExtension={updateExtension} change={change} notify={notify}/>,
     warehouse:<WarehouseWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
@@ -93,7 +105,7 @@ function App() {
     inventory:<Inventory data={data} ext={extension} updateExtension={updateExtension} notify={notify}/>,
     orders:<Orders data={data}/>,
     reports:<Reports data={data}/>,
-    staff:<Staff data={data} account={account} change={change} notify={notify}/>,
+    staff:<Staff data={data} ext={extension} updateExtension={updateExtension} account={account} change={change} notify={notify}/>,
     branches:<Branches data={data}/>,
     settings:<SettingsPage data={data} change={change} reset={()=>setShowReset(true)}/>
   })[page];
@@ -108,7 +120,7 @@ function App() {
     </aside>
     <div className="demo-main">
       <div className="demo-disclaimer"><span><ShieldCheck size={15}/> PORTFOLIO DEMO — SIMULATED DATA ONLY</span><button onClick={()=>setShowReset(true)}><RotateCcw size={14}/> Reset demo</button></div>
-      <header className="demo-topbar"><div className="demo-topbar-left"><button className="demo-menu-button" onClick={()=>setMobile(true)} aria-label="Open menu"><Menu size={22}/></button><span>Workspace <b>/</b> {menuItems.find(item=>item.id===page)?.label}</span></div><div className="demo-topbar-user"><span className="demo-date"><CalendarDays size={16}/> {new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</span><div className="demo-avatar">{account.name[0]}</div><div><strong>{account.name}</strong><small>{role?.charAt(0).toUpperCase()+role!.slice(1)} · Demo</small></div></div></header>
+      <header className="demo-topbar"><div className="demo-topbar-left"><button className="demo-menu-button" onClick={()=>setMobile(true)} aria-label="Open menu"><Menu size={22}/></button><span>Workspace <b>/</b> {menuItems.find(item=>item.id===page)?.label}</span></div><div className="demo-topbar-user"><span className="demo-date"><CalendarDays size={16}/> {new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</span>{role==='super_admin'&&<DemoNotificationBell ext={extension} update={updateExtension}/>}<div className="demo-avatar">{account.name[0]}</div><div><strong>{account.name}</strong><small>{role?.charAt(0).toUpperCase()+role!.slice(1)} · Demo</small></div></div></header>
       <main className="demo-content">{content}<footer className="demo-footer">StratifyPOS portfolio demonstration · No real orders, payments, or financial records.</footer></main>
     </div>
     {toast&&<div className="demo-toast" role="status"><Check size={16}/>{toast}</div>}
@@ -180,7 +192,7 @@ function PointOfSale({data,ext,updateExtension,role,branch,setBranch,change,noti
       balances:{...old.balances,[branch]:Object.fromEntries(Object.entries(old.balances[branch]||{}).map(([id,stock])=>[id,stock-(lines.find(x=>x.product.id===id&&tracksStock(x.product))?.row.qty||0)]))},
       movements:[...lines.filter(x=>tracksStock(x.product)).map(({row,product})=>({id:globalThis.crypto.randomUUID(),date:new Date().toISOString(),productId:product.id,from:branch,to:null,qty:row.qty,kind:'sale' as const,reason:'Checkout '+sale.id})),...old.movements],
       // A ticket points at a sale, but the kitchen view filters it to food lines only.
-      tickets:needsKitchenTicket(lines.map(x=>x.product))
+      tickets:data.businessType==='food'&&data.kitchenEnabled&&needsKitchenTicket(lines.map(x=>x.product))
         ? [{id:globalThis.crypto.randomUUID(),orderId:sale.id,branchId:branch,status:'pending' as const,updatedAt:new Date().toISOString()},...old.tickets]
         : old.tickets,
       registers:old.registers.map(r=>r.cashier===name&&r.branchId===branch&&r.status==='open'&&sale.payment==='cash'?{...r,movements:r.movements+sale.total}:r)
@@ -249,7 +261,14 @@ function Inventory({data,ext,updateExtension,notify}:{data:DemoData;ext:DemoExte
   notify('Branch stock adjustment saved.');setSelected(null);setError('');
  }
  return <><Heading title="Inventory management" description="Adjust stock for an individual location, inspect balances and use Stock & Transfers to move inventory between branches."
- actions={<select className="demo-input" value={branch} onChange={e=>setBranch(e.target.value)}>{data.branches.map(b=><option value={b.id} key={b.id}>{b.name}</option>)}</select>}/>
+ actions={<div className="demo-toolbar">
+ <select className="demo-input" value={branch} onChange={e=>setBranch(e.target.value)}>{data.branches.map(b=><option value={b.id} key={b.id}>{b.name}</option>)}</select>
+ {(['xlsx','pdf'] as const).map(format=><button key={format} className="demo-btn secondary"
+ onClick={()=>downloadDemoReport(format,'demo-inventory-'+branch,'Demo inventory stock report',
+ ['Item','Category','Branch','Available','Reorder level','Status'],
+ physical.map(p=>[p.name,p.category,data.branches.find(x=>x.id===branch)?.name||branch,balance(p),p.reorder,
+ balance(p)<=p.reorder?'Low stock':'In stock']))}><Download size={14}/> {format==='xlsx'?'Excel':'PDF'}</button>)}
+ </div>}/>
  <div className="demo-metrics demo-metrics-three"><Metric label="Stock items" value={String(physical.length)} icon={Package} tone="sage" detail="Monitored physical catalog"/>
  <Metric label="Low stock alerts" value={String(low)} icon={AlertTriangle} tone="sand" detail="At or below reorder point"/>
  <Metric label="Total units on hand" value={String(total)} icon={Store} tone="peach" detail="For selected branch"/></div>
@@ -275,15 +294,72 @@ function Reports({data}:{data:DemoData}) {
   function exportCsv(){const rows=[['Order','Date','Branch','Payment','Total PHP'],...data.orders.map(o=>[o.id,o.date,data.branches.find(b=>b.id===o.branchId)?.name||'',o.payment,String(o.total/100)])];const csv=rows.map(row=>row.map(cell=>'"'+String(cell).replace(/"/g,'""')+'"').join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const link=document.createElement('a');const url=URL.createObjectURL(blob);link.href=url;link.download='stratifypos-demo-sales.csv';link.click();URL.revokeObjectURL(url);}
   return <><Heading title="Reports & analytics" description="Synthetic business performance and sales insights." actions={<button className="demo-btn secondary" onClick={exportCsv}><Download size={16}/> Export demo CSV</button>}/><div className="demo-metrics demo-metrics-three"><Metric label="Total revenue" value={money(revenue)} icon={TrendingUp} detail="Sample sales, all dates"/><Metric label="Transactions" value={String(data.orders.length)} icon={ReceiptText} detail="Completed demo orders" tone="sage"/><Metric label="Average order" value={money(data.orders.length?Math.round(revenue/data.orders.length):0)} icon={Wallet} detail="Per sample transaction" tone="peach"/></div><div className="demo-two-col"><Card title="Revenue by product"><div className="demo-bars">{ranked.slice(0,7).map(([name,row])=><div className="demo-bar-row" key={name}><div><span>{name}</span><b>{money(row.total)}</b></div><div className="demo-track"><span style={{width:String(row.total/max*100)+'%'}}/></div></div>)}</div></Card><Card title="Sales by payment method"><div className="demo-payment-summary">{(['cash','gcash','maya','card'] as DemoPayment[]).map(p=>{const orders=data.orders.filter(o=>o.payment===p);return <div key={p}><span>{p.toUpperCase()}</span><strong>{money(orders.reduce((n,o)=>n+o.total,0))}</strong><small>{orders.length} orders</small></div>;})}</div></Card></div><Card title="Top selling products"><Table heads={['Product','Units sold','Gross sales']}>{ranked.map(([name,row])=><tr key={name}><td><b>{name}</b></td><td>{row.count}</td><td>{money(row.total)}</td></tr>)}</Table></Card></>;
 }
-function Staff({data,account,change,notify}:{data:DemoData;account:Account;change:(fn:(d:DemoData)=>DemoData)=>void;notify:(s:string)=>void}) {
-  const isCashier=account.role==='cashier';const person=data.staff.find(p=>p.name===account.name);
-  function toggle(){if(!person)return;change(old=>({...old,staff:old.staff.map(s=>s.id===person.id?{...s,shiftStart:s.shiftStart?null:today()}:s)}));notify(person.shiftStart?'Shift ended.':'Shift started.');}
-  return <><Heading title="Team & attendance" description="Explore sample team roles and a local shift check-in workflow."/><Card title="My attendance"><div className="demo-attendance"><div><Clock3 size={25}/><div><strong>{person?.shiftStart?'Clocked in':'Not currently clocked in'}</strong><p>{person?.shiftStart?'Since '+dateFmt(person.shiftStart):'You can simulate starting a shift.'}</p></div></div><button className="demo-btn primary" onClick={toggle}>{person?.shiftStart?'Clock out':'Clock in'}</button></div></Card>{!isCashier&&<Card title="Team directory"><Table heads={['Employee','Role','Assigned branch','Shift status']}>{data.staff.map(s=><tr key={s.id}><td><b>{s.name}</b></td><td className="capitalize">{s.role}</td><td>{data.branches.find(b=>b.id===s.branchId)?.name}</td><td><Pill tone={s.shiftStart?'green':'muted'}>{s.shiftStart?'Clocked in':'Not active'}</Pill></td></tr>)}</Table></Card>}</>;
+function Staff({data,ext,updateExtension,account,change,notify}:{data:DemoData;ext:DemoExtension;updateExtension:(fn:(e:DemoExtension)=>DemoExtension)=>void;account:Account;change:(fn:(d:DemoData)=>DemoData)=>void;notify:(s:string)=>void}) {
+ const isCashier=account.role==='cashier',person=data.staff.find(p=>p.name===account.name);
+ const [from,setFrom]=useState(new Date(Date.now()-29*86400000).toISOString().slice(0,10));
+ const [to,setTo]=useState(new Date().toISOString().slice(0,10));
+ const [error,setError]=useState('');
+ function toggle(){if(!person)return;
+  const ended=person.shiftStart,now=today();
+  if(ended)updateExtension(old=>({...old,attendanceLog:[{id:newId(),staffId:person.id,branchId:person.branchId,clockIn:ended,clockOut:now},...old.attendanceLog]}));
+  change(old=>({...old,staff:old.staff.map(s=>s.id===person.id?{...s,shiftStart:s.shiftStart?null:now}:s)}));
+  notify(ended?'Shift ended; demo timecard recorded.':'Shift started.');
+ }
+ const visible=ext.attendanceLog.filter(r=>r.clockIn.slice(0,10)>=from&&r.clockIn.slice(0,10)<=to);
+ function exportTimecard(format:'xlsx'|'pdf'){
+  try{
+   if(!from||!to||from>to)throw Error('Select a valid reporting period');
+   downloadDemoReport(format,'demo-timecards-'+from+'-'+to,'Employee timecards (demo)',
+    ['Employee','Branch','Time in','Time out','Work hours','Status'],
+    visible.map(r=>{const hours=r.clockOut?Math.round((Date.parse(r.clockOut)-Date.parse(r.clockIn))/360000)/10:0;
+     return [data.staff.find(p=>p.id===r.staffId)?.name||r.staffId,data.branches.find(b=>b.id===r.branchId)?.name||r.branchId,
+     r.clockIn,r.clockOut||'',hours,r.clockOut?'Completed':'In progress'];}));
+   setError('');
+  }catch(e){setError(e instanceof Error?e.message:'Report error')}
+ }
+ return <><Heading title="Team & attendance" description="Explore team roles, local check-in/out and sample payroll reference reports."/>
+ <Card title="My attendance"><div className="demo-attendance"><div><Clock3 size={25}/><div><strong>{person?.shiftStart?'Clocked in':'Not currently clocked in'}</strong><p>{person?.shiftStart?'Since '+dateFmt(person.shiftStart):'You can simulate starting a shift.'}</p></div></div>
+ <button className="demo-btn primary" onClick={toggle}>{person?.shiftStart?'Clock out':'Clock in'}</button></div></Card>
+ {!isCashier&&<><Card title="Attendance reports / employee timecards">
+ <div className="demo-appt-filters demo-toolbar"><label className="demo-label">From<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+ <label className="demo-label">Through<input type="date" min={from} value={to} onChange={e=>setTo(e.target.value)}/></label>
+ {(['xlsx','pdf'] as const).map(format=><button key={format} className="demo-btn secondary" disabled={from>to} onClick={()=>exportTimecard(format)}>
+ <Download size={14}/> Export {format==='xlsx'?'Excel':'PDF'}</button>)}</div>
+ {error&&<p className="demo-error">{error}</p>}
+ <p className="demo-muted" style={{padding:'0 20px'}}>Simulated records only. Absences cannot be inferred without an approved shift schedule; actual payroll requires review.</p>
+ <Table heads={['Employee','Time in','Time out','Hours']}>{visible.map(r=><tr key={r.id}><td>{data.staff.find(p=>p.id===r.staffId)?.name}</td>
+ <td>{dateFmt(r.clockIn)}</td><td>{r.clockOut?dateFmt(r.clockOut):'In progress'}</td>
+ <td>{r.clockOut?((Date.parse(r.clockOut)-Date.parse(r.clockIn))/3600000).toFixed(2):'—'}</td></tr>)}</Table></Card>
+ <Card title="Team directory"><Table heads={['Employee','Role','Assigned branch','Shift status']}>{data.staff.map(s=><tr key={s.id}><td><b>{s.name}</b></td><td className="capitalize">{s.role}</td><td>{data.branches.find(b=>b.id===s.branchId)?.name}</td><td><Pill tone={s.shiftStart?'green':'muted'}>{s.shiftStart?'Clocked in':'Not active'}</Pill></td></tr>)}</Table></Card></>}
+ </>;
 }
+
 function Branches({data}:{data:DemoData}) {return <><Heading title="Branches & locations" description="Sample business locations used throughout the demo."/><div className="demo-branch-grid">{data.branches.map(b=><Card key={b.id} title={b.name} right={<Pill tone="green">Active</Pill>}><div className="demo-branch-card"><Store size={30}/><p>{b.location}</p><p><b>{data.orders.filter(o=>o.branchId===b.id).length}</b> demo transactions</p><small>Sample location — no live store connection</small></div></Card>)}</div></>;}
 function SettingsPage({data,change,reset}:{data:DemoData;change:(fn:(d:DemoData)=>DemoData)=>void;reset:()=>void}) {
-  const [tax,setTax]=useState(String(data.taxRate));const [service,setService]=useState(String(data.serviceRate));const [footer,setFooter]=useState(data.footer);
-  function save(e:React.FormEvent){e.preventDefault();const t=Number(tax),s=Number(service);if(![t,s].every(v=>Number.isFinite(v)&&v>=0&&v<=30))return;change(old=>({...old,taxRate:t,serviceRate:s,footer}));}
-  return <><Heading title="Settings" description="Configure simulated checkout calculations and reset sample data."/><div className="demo-two-col"><Card title="Checkout settings"><form className="demo-settings-form" onSubmit={save}><label className="demo-label">Tax rate (%)<input type="number" min="0" max="30" step=".01" value={tax} onChange={e=>setTax(e.target.value)}/></label><label className="demo-label">Service rate (%)<input type="number" min="0" max="30" step=".01" value={service} onChange={e=>setService(e.target.value)}/></label><label className="demo-label">Receipt footer<textarea rows={3} value={footer} onChange={e=>setFooter(e.target.value)}/></label><button className="demo-btn primary">Save demo settings</button></form></Card><Card title="Demo environment"><div className="demo-environment"><ShieldCheck size={28}/><h3>Safe to explore</h3><p>This portfolio build is browser-only. It has no real authentication backend, no payment gateway, and no access to production tenant data.</p><p>State persists in this browser until you reset it or clear local storage.</p><button className="demo-btn secondary" onClick={reset}><RotateCcw size={15}/> Restore original demo data</button></div></Card></div></>;
+ const [tax,setTax]=useState(String(data.taxRate)),[service,setService]=useState(String(data.serviceRate)),[footer,setFooter]=useState(data.footer);
+ const [businessType,setBusinessType]=useState(data.businessType),[kitchen,setKitchen]=useState(data.kitchenEnabled);
+ function save(e:React.FormEvent){e.preventDefault();const t=Number(tax),s=Number(service);
+  if(![t,s].every(v=>Number.isFinite(v)&&v>=0&&v<=30))return;
+  change(old=>({...old,taxRate:t,serviceRate:s,footer,businessType,kitchenEnabled:businessType==='food'&&kitchen}));
+ }
+ return <><Heading title="Settings" description="Configure simulated checkout and business-type features."/>
+ <div className="demo-two-col"><Card title="Checkout & business settings"><form className="demo-settings-form" onSubmit={save}>
+ <label className="demo-label">Business type<select value={businessType} onChange={e=>{const type=e.target.value as DemoData['businessType'];setBusinessType(type);if(type==='non_food')setKitchen(false);}}>
+ <option value="food">Restaurant / food and beverage</option><option value="non_food">Other business (retail, gym, clinic, services)</option></select></label>
+ <label className="demo-label">Kitchen Display<select value={businessType==='food'&&kitchen?'on':'off'}
+ disabled={businessType!=='food'} onChange={e=>setKitchen(e.target.value==='on')}>
+ {businessType==='food'&&<option value="on">Enabled</option>}<option value="off">Disabled</option>
+ </select></label>
+ <p className="demo-muted">Non-food businesses cannot enable kitchen fulfillment. Your product records stay intact.</p>
+ <label className="demo-label">Tax rate (%)<input type="number" min="0" max="30" step=".01" value={tax} onChange={e=>setTax(e.target.value)}/></label>
+ <label className="demo-label">Service rate (%)<input type="number" min="0" max="30" step=".01" value={service} onChange={e=>setService(e.target.value)}/></label>
+ <label className="demo-label">Receipt footer<textarea rows={3} value={footer} onChange={e=>setFooter(e.target.value)}/></label>
+ <button className="demo-btn primary">Save demo settings</button></form></Card>
+ <Card title="Demo environment"><div className="demo-environment"><ShieldCheck size={28}/><h3>Safe to explore</h3>
+ <p>This portfolio build uses browser-local data, without real authentication, payment processing, or a production tenant connection.</p>
+ <p>State persists in this browser until you reset the demo or clear local storage.</p>
+ <button className="demo-btn secondary" onClick={reset}><RotateCcw size={15}/> Restore original demo data</button>
+ </div></Card></div></>;
 }
+
 createRoot(document.getElementById('root')!).render(<App/>);

@@ -1,7 +1,7 @@
 /** Synthetic, browser-local fixtures for the public portfolio demonstration.
  * This is NOT the production data model, authentication service, or API.
  */
-export type DemoRole = 'owner' | 'manager' | 'cashier';
+export type DemoRole = 'owner' | 'manager' | 'cashier' | 'super_admin';
 export type DemoPayment = 'cash' | 'gcash' | 'maya' | 'card';
 export type DemoOrderType = 'standard' | 'takeout' | 'dine_in' | 'delivery';
 
@@ -21,6 +21,7 @@ export interface DemoData {
   version: 1; products: DemoProduct[]; branches: DemoBranch[];
   orders: DemoSale[]; staff: DemoStaff[];
   taxRate: number; serviceRate: number; footer: string; promotionActive: boolean;
+  businessType:'food'|'non_food'; kitchenEnabled:boolean;
 }
 export const DEMO_STORAGE_KEY = 'stratify-portfolio-demo-v1';
 export const DEMO_SESSION_KEY = 'stratify-portfolio-demo-user-v1';
@@ -28,7 +29,8 @@ export const DEMO_PASSWORD = 'demo1234';
 export const demoAccounts = [
   { email: 'owner@demo.stratifypos.app', name: 'Alex Rivera', role: 'owner' as DemoRole, description: 'Full business overview and management' },
   { email: 'manager@demo.stratifypos.app', name: 'Sam Reyes', role: 'manager' as DemoRole, description: 'Inventory, menu, reports, and sales' },
-  { email: 'cashier@demo.stratifypos.app', name: 'Jamie Cruz', role: 'cashier' as DemoRole, description: 'Checkout, sales history, and attendance' }
+  { email: 'cashier@demo.stratifypos.app', name: 'Jamie Cruz', role: 'cashier' as DemoRole, description: 'Checkout, sales history, and attendance' },
+  { email: 'admin@demo.stratifypos.app', name: 'Platform Administrator', role: 'super_admin' as DemoRole, description: 'Platform users, business filtering, and notifications' }
 ];
 const daysAgo = (offset: number, hours = 12) => {
   const value = new Date();
@@ -98,7 +100,7 @@ export function initialDemoData(): DemoData {
       {id:'s3',name:'Jamie Cruz',role:'cashier',branchId:'b1',shiftStart:null}
     ],
     taxRate:0,serviceRate:0,footer:'Thank you for your purchase at StratifyPOS Demo!',
-    promotionActive:true
+    promotionActive:true,businessType:'food',kitchenEnabled:true
   };
 }
 export function readDemoData(): DemoData {
@@ -111,7 +113,8 @@ export function readDemoData(): DemoData {
         const known = new Set(value.products.map(p=>p.id));
         const added=seedProducts.filter(p=>!known.has(p.id)).map(normalizeProduct);
         const products=value.products.map(normalizeProduct);
-        return {...value,products:[...products,...added]};
+        return {...value,products:[...products,...added],businessType:value.businessType||'food',
+          kitchenEnabled:value.businessType==='non_food'?false:value.kitchenEnabled!==false};
       }
     }
   } catch { /* Storage may be disabled by the visitor. */ }
@@ -161,6 +164,13 @@ export interface DemoCustomer {id:string;name:string;email:string;phone:string;r
 export interface DemoEntitlement {id:string;customerId:string;planId:string;branchId:string;startsOn:string;expiresOn:string|null;status:'active'|'cancelled';events:{id:string;at:string;kind:'grant'|'renew'|'cancel';reason:string;expiresOn:string|null;saleId?:string}[]}
 export interface DemoQrRequest {id:string;branchId:string;table:string;items:{productId:string;qty:number}[];payment:DemoPayment;status:'awaiting_payment'|'confirmed'|'cancelled';createdAt:string;orderId?:string}
 export interface DemoKitchenTicket {id:string;orderId:string;branchId:string;status:'pending'|'preparing'|'ready'|'completed';updatedAt:string}
+export interface DemoAppointment {
+ id:string;branchId:string;customerId:string|null;customerName:string;serviceName:string;
+ contact:string;resourceName:string;requirements:string;notes:string;start:string;end:string;
+ status:'pending'|'confirmed'|'rescheduled'|'completed'|'cancelled';
+}
+export interface DemoAttendanceRecord {id:string;staffId:string;branchId:string;clockIn:string;clockOut:string|null}
+export interface DemoPlatformNotice {id:string;title:string;message:string;date:string;read:boolean;kind:'action'|'info'}
 export interface DemoExtension {
  version:2;
  balances:Record<string,Record<string,number>>;
@@ -168,6 +178,7 @@ export interface DemoExtension {
  registers:DemoRegister[];refunds:DemoRefund[];holds:DemoHold[];
  plans:DemoServicePlan[];customers:DemoCustomer[];entitlements:DemoEntitlement[];
  requests:DemoQrRequest[];tickets:DemoKitchenTicket[];
+ appointments:DemoAppointment[];attendanceLog:DemoAttendanceRecord[];platformNotifications:DemoPlatformNotice[];
 }
 export const EXTENSION_KEY='stratify-demo-workflows-v2';
 export const newId=()=>globalThis.crypto?.randomUUID?.()||'D-'+Date.now()+'-'+Math.random().toString(36).slice(2);
@@ -180,7 +191,24 @@ export function seedExtension(products:DemoProduct[]=seedProducts):DemoExtension
   plans:[{id:'plan1',productId:'svc1',name:'Gym Monthly Membership',durationKind:'months',durationValue:1,active:true,sellThroughPos:true},
          {id:'plan2',productId:'svc2',name:'Dental Care Plan',durationKind:'none',durationValue:null,active:true,sellThroughPos:true}],
   customers:[{id:'cus1',name:'Taylor Santos',email:'taylor@example.invalid',phone:'',reference:'MEM-001'}],
-  entitlements:[],requests:[],tickets:[]};
+  entitlements:[],requests:[],tickets:[],
+  appointments:[
+   {id:'appt1',branchId:'b1',customerId:'cus1',customerName:'Taylor Santos',serviceName:'Dental Consultation',
+    contact:'',resourceName:'Consultation Room A',requirements:'Bring previous records',notes:'',
+    start:new Date(Date.now()+86400000).toISOString(),end:new Date(Date.now()+90000000).toISOString(),status:'confirmed'},
+   {id:'appt2',branchId:'b2',customerId:null,customerName:'Morgan Lee',serviceName:'Membership orientation',
+    contact:'',resourceName:'Training Room',requirements:'First-time member',notes:'',
+    start:new Date(Date.now()+172800000).toISOString(),end:new Date(Date.now()+176400000).toISOString(),status:'pending'}
+  ],
+  attendanceLog:[{id:'att1',staffId:'s3',branchId:'b1',clockIn:daysAgo(1,9),clockOut:daysAgo(1,17)},
+    {id:'att2',staffId:'s2',branchId:'b2',clockIn:daysAgo(2,9),clockOut:daysAgo(2,17)},
+    {id:'att3',staffId:'s1',branchId:'b1',clockIn:daysAgo(3,9),clockOut:daysAgo(3,17)}],
+  platformNotifications:[
+   {id:'note1',title:'Payment awaiting review',message:'Example Coffee · Business subscription',date:daysAgo(0,10),read:false,kind:'action'},
+   {id:'note2',title:'New free trial',message:'Sample Gym started a trial',date:daysAgo(0,9),read:false,kind:'info'},
+   {id:'note3',title:'Trial ending soon',message:'Example Clinic · 3 days remaining',date:daysAgo(1,13),read:false,kind:'action'},
+   {id:'note4',title:'Subscription renewed',message:'Sample Retail · Business plan',date:daysAgo(2,13),read:true,kind:'info'}
+  ]};
 }
 export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension {
  try {
@@ -218,7 +246,11 @@ export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension
           (!p.kind&&legacyKitchenFoodCategories.has(p.category.trim().toLowerCase())));
       });
     });
-    return {...value,balances,tickets,plans:(value.plans||[]).map((p:DemoServicePlan)=>({...p,sellThroughPos:p.sellThroughPos??(p.id==='plan1'||p.id==='plan2')}))};
+    return {...value,balances,tickets,
+      appointments:Array.isArray(value.appointments)?value.appointments:seedExtension(products).appointments,
+      attendanceLog:Array.isArray(value.attendanceLog)?value.attendanceLog:seedExtension(products).attendanceLog,
+      platformNotifications:Array.isArray(value.platformNotifications)?value.platformNotifications:seedExtension(products).platformNotifications,
+      plans:(value.plans||[]).map((p:DemoServicePlan)=>({...p,sellThroughPos:p.sellThroughPos??(p.id==='plan1'||p.id==='plan2')}))};
   }
  }catch{}
  return seedExtension(products);
@@ -313,4 +345,23 @@ export function fulfillMembershipSale(ext:DemoExtension,sale:DemoSale,products:r
    }
  }
  return {...ext,entitlements};
+}
+
+/** Validate browser-local appointment edits using the same conflict rules as production. */
+export function validateDemoAppointment(existing:readonly DemoAppointment[],draft:DemoAppointment):void {
+ if(!draft.branchId||!draft.customerName.trim()||!draft.serviceName.trim()||!draft.resourceName.trim()||
+    draft.customerName.length>160||draft.serviceName.length>160||
+    draft.resourceName.length>120||draft.notes.length>2000||draft.requirements.length>2000)
+  throw new Error('Fill in valid customer, service, branch and resource details');
+ const start=Date.parse(draft.start),end=Date.parse(draft.end);
+ if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start||end-start>86400000)
+  throw new Error('End time must be after start and no more than 24 hours later');
+ if(!['pending','confirmed','rescheduled','completed','cancelled'].includes(draft.status))
+  throw new Error('Invalid appointment status');
+ if(['cancelled','completed'].includes(draft.status))return;
+ if(existing.some(item=>item.id!==draft.id&&item.branchId===draft.branchId&&
+   item.resourceName.trim().toLowerCase()===draft.resourceName.trim().toLowerCase()&&
+   !['cancelled','completed'].includes(item.status)&&
+   Date.parse(item.start)<end&&Date.parse(item.end)>start))
+  throw new Error('This room or staff resource already has an appointment at the selected time');
 }
