@@ -301,12 +301,12 @@ test('full refund of renewal restores previous expiry and rejects reversing olde
 test('cashier demo navigation exposes memberships with read-only reception workflow',()=>{
  const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
  const service=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
- assert(ui.includes("'kitchen','guide','memberships'"));
+ assert(ui.includes("'kitchen','guide','memberships','appointments'"));
  assert(service.includes("readonly=role==='cashier'"));
  assert(service.includes("{!readonly&&<Section title=\"Issue customer membership\""));
  assert(service.includes("{!readonly&&e.status==='active'"));
  assert(service.includes("Reception lookup only"));
- assert(service.includes("visibleEntitlements.map"));
+ assert(service.includes("filteredEntitlements.map"));
 });
 
 test('new browser demo data models are initialized and preserve compatibility',()=>{
