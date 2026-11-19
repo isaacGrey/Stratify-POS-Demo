@@ -1,7 +1,7 @@
 /** Synthetic, browser-local fixtures for the public portfolio demonstration.
  * This is NOT the production data model, authentication service, or API.
  */
-export type DemoRole = 'owner' | 'manager' | 'cashier';
+export type DemoRole = 'owner' | 'manager' | 'cashier' | 'superadmin';
 export type DemoPayment = 'cash' | 'gcash' | 'maya' | 'card';
 export type DemoOrderType = 'standard' | 'takeout' | 'dine_in' | 'delivery';
 
@@ -18,7 +18,7 @@ export interface DemoSale {
 }
 export interface DemoStaff { id: string; name: string; role: DemoRole; branchId: string; shiftStart: string | null; }
 export interface DemoData {
-  version: 1; products: DemoProduct[]; branches: DemoBranch[];
+  version: 1; businessType?:'food'|'non_food'; kitchenEnabled?:boolean; products: DemoProduct[]; branches: DemoBranch[];
   orders: DemoSale[]; staff: DemoStaff[];
   taxRate: number; serviceRate: number; footer: string; promotionActive: boolean;
 }
@@ -28,7 +28,8 @@ export const DEMO_PASSWORD = 'demo1234';
 export const demoAccounts = [
   { email: 'owner@demo.stratifypos.app', name: 'Alex Rivera', role: 'owner' as DemoRole, description: 'Full business overview and management' },
   { email: 'manager@demo.stratifypos.app', name: 'Sam Reyes', role: 'manager' as DemoRole, description: 'Inventory, menu, reports, and sales' },
-  { email: 'cashier@demo.stratifypos.app', name: 'Jamie Cruz', role: 'cashier' as DemoRole, description: 'Checkout, sales history, and attendance' }
+  { email: 'cashier@demo.stratifypos.app', name: 'Jamie Cruz', role: 'cashier' as DemoRole, description: 'Checkout, sales history, and attendance' },
+  { email: 'admin@demo.stratifypos.app', name: 'Morgan Cruz', role: 'superadmin' as DemoRole, description: 'Platform users, trial alerts, payment notifications' }
 ];
 const daysAgo = (offset: number, hours = 12) => {
   const value = new Date();
@@ -74,7 +75,7 @@ function seedSale(index: number, day: number, hour: number, branchId: string, pa
 }
 export function initialDemoData(): DemoData {
   return {
-    version:1,
+    version:1,businessType:'food',kitchenEnabled:true,
     products:seedProducts.map(normalizeProduct),
     branches:seedBranches.map(branch=>({...branch})),
     orders:[
@@ -111,7 +112,7 @@ export function readDemoData(): DemoData {
         const known = new Set(value.products.map(p=>p.id));
         const added=seedProducts.filter(p=>!known.has(p.id)).map(normalizeProduct);
         const products=value.products.map(normalizeProduct);
-        return {...value,products:[...products,...added]};
+        return {...value,businessType:value.businessType||'food',kitchenEnabled:(value.businessType||'food')==='food'&&(value.kitchenEnabled??true),products:[...products,...added]};
       }
     }
   } catch { /* Storage may be disabled by the visitor. */ }
@@ -161,8 +162,13 @@ export interface DemoCustomer {id:string;name:string;email:string;phone:string;r
 export interface DemoEntitlement {id:string;customerId:string;planId:string;branchId:string;startsOn:string;expiresOn:string|null;status:'active'|'cancelled';events:{id:string;at:string;kind:'grant'|'renew'|'cancel';reason:string;expiresOn:string|null;saleId?:string}[]}
 export interface DemoQrRequest {id:string;branchId:string;table:string;items:{productId:string;qty:number}[];payment:DemoPayment;status:'awaiting_payment'|'confirmed'|'cancelled';createdAt:string;orderId?:string}
 export interface DemoKitchenTicket {id:string;orderId:string;branchId:string;status:'pending'|'preparing'|'ready'|'completed';updatedAt:string}
+export type DemoAppointmentStatus='pending'|'confirmed'|'rescheduled'|'completed'|'cancelled';
+export interface DemoAppointment {id:string;branchId:string;customerId?:string;clientName:string;clientContact:string;serviceName:string;requirements:string;resourceKey:string;startsAt:string;endsAt:string;status:DemoAppointmentStatus;events:{at:string;kind:string;reason:string}[];}
+export interface DemoAttendanceRecord {id:string;staffId:string;branchId:string;startsAt:string;endsAt:string|null;breakMinutes:number;}
+export interface DemoNotification {id:string;title:string;detail:string;kind:string;at:string;read:boolean;}
 export interface DemoExtension {
  version:2;
+ appointments:DemoAppointment[];attendanceRecords:DemoAttendanceRecord[];platformNotifications:DemoNotification[];
  balances:Record<string,Record<string,number>>;
  movements:DemoMovement[];suppliers:DemoSupplier[];purchases:DemoPurchase[];
  registers:DemoRegister[];refunds:DemoRefund[];holds:DemoHold[];
@@ -180,7 +186,19 @@ export function seedExtension(products:DemoProduct[]=seedProducts):DemoExtension
   plans:[{id:'plan1',productId:'svc1',name:'Gym Monthly Membership',durationKind:'months',durationValue:1,active:true,sellThroughPos:true},
          {id:'plan2',productId:'svc2',name:'Dental Care Plan',durationKind:'none',durationValue:null,active:true,sellThroughPos:true}],
   customers:[{id:'cus1',name:'Taylor Santos',email:'taylor@example.invalid',phone:'',reference:'MEM-001'}],
-  entitlements:[],requests:[],tickets:[]};
+  entitlements:[],requests:[],tickets:[],
+  attendanceRecords:[{id:'att1',staffId:'s2',branchId:'b2',startsAt:daysAgo(2,8),endsAt:daysAgo(2,17),breakMinutes:60},
+    {id:'att2',staffId:'s3',branchId:'b1',startsAt:daysAgo(1,9),endsAt:daysAgo(1,17),breakMinutes:30}],
+  appointments:[{id:'appt1',branchId:'b1',customerId:'cus1',clientName:'Taylor Santos',clientContact:'09170000000',
+    serviceName:'Dental Cleaning',requirements:'Please arrive 10 minutes early',resourceKey:'dental room 1',
+    startsAt:new Date(Date.now()+86400000).toISOString().slice(0,10)+'T03:00:00.000Z',
+    endsAt:new Date(Date.now()+86400000).toISOString().slice(0,10)+'T04:00:00.000Z',
+    status:'confirmed',events:[{at:new Date().toISOString(),kind:'created',reason:'Demo appointment'}]}],
+  platformNotifications:[
+    {id:'notice1',title:'New business registration',detail:'Sample Coffee House started a free trial',kind:'trial',at:daysAgo(0,9),read:false},
+    {id:'notice2',title:'Payment awaiting approval',detail:'Sample Retail Co. submitted a subscription receipt',kind:'payment',at:daysAgo(0,11),read:false},
+    {id:'notice3',title:'Trial expires soon',detail:'Sample Clinic has three days remaining',kind:'expiry',at:daysAgo(1,12),read:false}
+  ]};
 }
 export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension {
  try {
@@ -218,7 +236,11 @@ export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension
           (!p.kind&&legacyKitchenFoodCategories.has(p.category.trim().toLowerCase())));
       });
     });
-    return {...value,balances,tickets,plans:(value.plans||[]).map((p:DemoServicePlan)=>({...p,sellThroughPos:p.sellThroughPos??(p.id==='plan1'||p.id==='plan2')}))};
+    return {...value,balances,tickets,
+      appointments:Array.isArray(value.appointments)?value.appointments:seedExtension(products).appointments,
+      attendanceRecords:Array.isArray(value.attendanceRecords)?value.attendanceRecords:seedExtension(products).attendanceRecords,
+      platformNotifications:Array.isArray(value.platformNotifications)?value.platformNotifications:seedExtension(products).platformNotifications,
+      plans:(value.plans||[]).map((p:DemoServicePlan)=>({...p,sellThroughPos:p.sellThroughPos??(p.id==='plan1'||p.id==='plan2')}))};
   }
  }catch{}
  return seedExtension(products);

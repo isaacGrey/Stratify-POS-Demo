@@ -60,3 +60,30 @@
 .demo-membership-picker .demo-label{margin-bottom:5px}
 .demo-item-kind{display:block;color:#947252;font-size:10px;font-weight:700;margin-top:5px}
 .demo-membership-info{font-size:11px;color:#716a62;margin:8px 0 0}
+
+/* November feature parity: compact appointment planning, reports and platform notifications */
+.demo-ops-page{display:grid;gap:13px}.demo-ops-hint{font-size:11px;color:#736d66;line-height:1.5;padding:10px 14px}
+.demo-appointment-filters,.demo-membership-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;padding:12px 14px;align-items:end}
+.demo-appointment-filters label,.demo-appointment-form label,.demo-membership-controls .demo-label{font-size:11px;font-weight:700;color:#645d53;display:grid;gap:6px}
+.demo-appointment-filters input,.demo-appointment-filters select,.demo-appointment-form input,
+.demo-appointment-form select,.demo-appointment-form textarea,.demo-membership-controls input,.demo-membership-controls select{
+ width:100%;min-width:0;padding:9px 10px;border:1px solid #e4e1d9;border-radius:9px;background:#fff;color:#302a25}
+.demo-appointment-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;padding:12px}
+.demo-appointment-day{min-width:0;min-height:140px;border:1px solid #eae5dc;border-radius:10px;background:#fdfcfb;padding:9px;display:flex;flex-direction:column;gap:7px}
+.demo-appointment-day>b{font-size:11px;color:#665b50}.demo-appointment-tile{padding:8px;border:1px solid #e8ddd0;background:#fbf4e9;border-radius:8px;display:grid;gap:3px;min-width:0;text-align:left;cursor:pointer;color:#4c4035;font-size:11px;overflow-wrap:anywhere}
+.demo-appointment-tile>b{font-size:11px}.demo-appointment-tile small{font-size:10px;color:#8b7a67}
+.demo-appointment-modal{width:min(700px,96vw);max-height:90vh;overflow-y:auto}
+.demo-appointment-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px;margin-top:14px}
+.demo-appointment-form .wide{grid-column:1/-1}.demo-appointment-form textarea{min-height:75px}
+.demo-notification-bell{position:relative;margin-right:10px}.demo-notification-trigger{position:relative;display:flex;background:transparent;border:1px solid #e7e5dd;border-radius:9px;padding:8px;color:#5d5145;cursor:pointer}
+.demo-notification-trigger span{position:absolute;right:-7px;top:-8px;background:#bc5644;color:white;padding:2px 5px;border-radius:12px;font-size:10px;font-weight:800}
+.demo-notification-popover{position:absolute;right:0;top:45px;width:min(380px,90vw);max-height:450px;overflow-y:auto;background:#fff;box-shadow:0 15px 55px #24211a31;border:1px solid #e4ddd2;border-radius:12px;padding:14px;z-index:200}
+.demo-notification-list{display:grid;gap:8px;padding:12px}
+.demo-notification{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;border:1px solid #eae4db;border-radius:9px;padding:11px}
+.demo-notification.unread{background:#fbf5ed;border-left:3px solid #bd8b50}
+.demo-notification strong{font-size:12px}.demo-notification p{font-size:11px;color:#6f685f;margin:5px 0}.demo-notification small{font-size:10px;color:#958b7f}
+.demo-checkbox{display:flex;align-items:center;gap:7px;font-size:12px;color:#63594d}
+.demo-ops-page .demo-heading{margin-bottom:5px}.demo-role-picker{max-height:315px;overflow-y:auto}
+@media(max-width:1100px){.demo-appointment-calendar{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:700px){.demo-appointment-calendar{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-appointment-day{min-height:110px}}
+@media(max-width:520px){.demo-appointment-form,.demo-appointment-filters,.demo-membership-controls{grid-template-columns:1fr}.demo-notification-popover{position:fixed;top:72px;right:12px}}
