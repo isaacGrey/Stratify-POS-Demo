@@ -192,7 +192,7 @@ function PointOfSale({data,ext,updateExtension,role,branch,setBranch,change,noti
       balances:{...old.balances,[branch]:Object.fromEntries(Object.entries(old.balances[branch]||{}).map(([id,stock])=>[id,stock-(lines.find(x=>x.product.id===id&&tracksStock(x.product))?.row.qty||0)]))},
       movements:[...lines.filter(x=>tracksStock(x.product)).map(({row,product})=>({id:globalThis.crypto.randomUUID(),date:new Date().toISOString(),productId:product.id,from:branch,to:null,qty:row.qty,kind:'sale' as const,reason:'Checkout '+sale.id})),...old.movements],
       // A ticket points at a sale, but the kitchen view filters it to food lines only.
-      tickets:needsKitchenTicket(lines.map(x=>x.product))
+      tickets:data.businessType==='food'&&data.kitchenEnabled&&needsKitchenTicket(lines.map(x=>x.product))
         ? [{id:globalThis.crypto.randomUUID(),orderId:sale.id,branchId:branch,status:'pending' as const,updatedAt:new Date().toISOString()},...old.tickets]
         : old.tickets,
       registers:old.registers.map(r=>r.cashier===name&&r.branchId===branch&&r.status==='open'&&sale.payment==='cash'?{...r,movements:r.movements+sale.total}:r)

@@ -202,11 +202,11 @@ export function QrWorkflows({data,ext,update,change,notify}:Props){
     const foodLines=kitchenLineItems(saleLines,data.products);
     return {...old,balances,movements:[...movements,...old.movements],
       requests:old.requests.map(r=>r.id===id?{...r,status:'confirmed',orderId}:r),
-      tickets:needsKitchenTicket(foodProducts)&&foodLines.length
+      tickets:data.businessType==='food'&&data.kitchenEnabled&&needsKitchenTicket(foodProducts)&&foodLines.length
         ?[{id:newId(),orderId,branchId:request.branchId,status:'pending' as const,updatedAt:new Date().toISOString()},...old.tickets]
         :old.tickets};
   });
-  notify(needsKitchenTicket(foodProducts)?'Payment confirmed; food sent to kitchen.':'Standard sale confirmed without a kitchen ticket.');
+  notify(data.businessType==='food'&&data.kitchenEnabled&&needsKitchenTicket(foodProducts)?'Payment confirmed; food sent to kitchen.':'Standard sale confirmed without a kitchen ticket.');
  }
  return <><Intro title="Customer QR menus & requests" text="Simulate a customer scanning a table QR, submitting an unpaid request, and a manager confirming payment before the kitchen receives it. No actual QR payment gateway is connected."/>
  <Section title="Simulate a table QR order"><div className="demo-workflow-form">
