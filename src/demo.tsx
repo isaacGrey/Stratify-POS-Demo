@@ -15,11 +15,10 @@ import {
 import {WarehouseWorkflows,PurchasingWorkflows,MembershipWorkflows,RegisterWorkflows,KitchenWorkflows,QrWorkflows,RefundWorkflows,DemoFeatureGuide} from './workflows';
 import {usesFoodFulfillment,saleOrderType,needsKitchenTicket,kitchenLineItems} from './sale-flow';
 import {DemoAppointments} from './demo-appointments';
-import {DemoPlatformUsers,DemoPlatformDashboard,DemoNotificationBell} from './demo-admin';
 import {downloadDemoReport} from './demo-exports';
 import './demo.css';
 
-type Page = 'overview'|'pos'|'products'|'inventory'|'warehouse'|'purchasing'|'memberships'|'register'|'qr'|'kitchen'|'refunds'|'guide'|'orders'|'reports'|'staff'|'branches'|'settings'|'appointments'|'platform_users';
+type Page = 'overview'|'pos'|'products'|'inventory'|'warehouse'|'purchasing'|'memberships'|'register'|'qr'|'kitchen'|'refunds'|'guide'|'orders'|'reports'|'staff'|'branches'|'settings'|'appointments';
 type Account = (typeof demoAccounts)[number];
 type CartLine = { productId: string; qty: number };
 const money = (amount: number) => new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:2}).format(amount/100);
@@ -35,7 +34,6 @@ const menuItems: {id:Page;label:string;icon:React.ComponentType<{size?:number}>}
   {id:'purchasing',label:'Purchasing & Suppliers',icon:Package},
   {id:'memberships',label:'Customer Memberships',icon:CalendarDays},
   {id:'appointments',label:'Appointment Scheduling',icon:CalendarDays},
-  {id:'platform_users',label:'Platform Users',icon:Users},
   {id:'register',label:'Cash Registers',icon:Wallet},
   {id:'qr',label:'Customer QR Orders',icon:ShoppingCart},
   {id:'kitchen',label:'Kitchen Display',icon:ReceiptText},
@@ -70,8 +68,6 @@ function App() {
   const account = demoAccounts.find(u=>u.email===email);
   const role = account?.role;
   const permitted = (id:Page) => {
-   if(role==='super_admin')return ['overview','platform_users'].includes(id);
-   if(id==='platform_users')return false;
    if(id==='kitchen'&&(data.businessType==='non_food'||!data.kitchenEnabled))return false;
    return role!=='cashier'||['overview','pos','orders','staff','register','kitchen','guide','memberships','appointments'].includes(id);
   };
@@ -89,8 +85,7 @@ function App() {
   if(!account)return <Login onLogin={login}/>;
   const visible=menuItems.filter(item=>permitted(item.id));
   const content = ({
-    overview:role==='super_admin'?<DemoPlatformDashboard ext={extension}/>:<Dashboard data={data} ext={extension} open={navigate} />,
-    platform_users:<DemoPlatformUsers data={data}/>,
+    overview:<Dashboard data={data} ext={extension} open={navigate} />,
     appointments:<DemoAppointments data={data} ext={extension} update={updateExtension} notify={notify}/>,
     pos:<PointOfSale data={data} ext={extension} updateExtension={updateExtension} role={role!} branch={branch} setBranch={setBranch} change={change} notify={notify} name={account.name} />,
     products:<Products data={data} ext={extension} updateExtension={updateExtension} change={change} notify={notify}/>,
@@ -120,7 +115,7 @@ function App() {
     </aside>
     <div className="demo-main">
       <div className="demo-disclaimer"><span><ShieldCheck size={15}/> PORTFOLIO DEMO — SIMULATED DATA ONLY</span><button onClick={()=>setShowReset(true)}><RotateCcw size={14}/> Reset demo</button></div>
-      <header className="demo-topbar"><div className="demo-topbar-left"><button className="demo-menu-button" onClick={()=>setMobile(true)} aria-label="Open menu"><Menu size={22}/></button><span>Workspace <b>/</b> {menuItems.find(item=>item.id===page)?.label}</span></div><div className="demo-topbar-user"><span className="demo-date"><CalendarDays size={16}/> {new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</span>{role==='super_admin'&&<DemoNotificationBell ext={extension} update={updateExtension}/>}<div className="demo-avatar">{account.name[0]}</div><div><strong>{account.name}</strong><small>{role?.charAt(0).toUpperCase()+role!.slice(1)} · Demo</small></div></div></header>
+      <header className="demo-topbar"><div className="demo-topbar-left"><button className="demo-menu-button" onClick={()=>setMobile(true)} aria-label="Open menu"><Menu size={22}/></button><span>Workspace <b>/</b> {menuItems.find(item=>item.id===page)?.label}</span></div><div className="demo-topbar-user"><span className="demo-date"><CalendarDays size={16}/> {new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</span><div className="demo-avatar">{account.name[0]}</div><div><strong>{account.name}</strong><small>{role?.charAt(0).toUpperCase()+role!.slice(1)} · Demo</small></div></div></header>
       <main className="demo-content">{content}<footer className="demo-footer">StratifyPOS portfolio demonstration · No real orders, payments, or financial records.</footer></main>
     </div>
     {toast&&<div className="demo-toast" role="status"><Check size={16}/>{toast}</div>}

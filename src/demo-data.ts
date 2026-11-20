@@ -1,7 +1,7 @@
 /** Synthetic, browser-local fixtures for the public portfolio demonstration.
  * This is NOT the production data model, authentication service, or API.
  */
-export type DemoRole = 'owner' | 'manager' | 'cashier' | 'super_admin';
+export type DemoRole = 'owner' | 'manager' | 'cashier';
 export type DemoPayment = 'cash' | 'gcash' | 'maya' | 'card';
 export type DemoOrderType = 'standard' | 'takeout' | 'dine_in' | 'delivery';
 
@@ -29,8 +29,7 @@ export const DEMO_PASSWORD = 'demo1234';
 export const demoAccounts = [
   { email: 'owner@demo.stratifypos.app', name: 'Alex Rivera', role: 'owner' as DemoRole, description: 'Full business overview and management' },
   { email: 'manager@demo.stratifypos.app', name: 'Sam Reyes', role: 'manager' as DemoRole, description: 'Inventory, menu, reports, and sales' },
-  { email: 'cashier@demo.stratifypos.app', name: 'Jamie Cruz', role: 'cashier' as DemoRole, description: 'Checkout, sales history, and attendance' },
-  { email: 'admin@demo.stratifypos.app', name: 'Platform Administrator', role: 'super_admin' as DemoRole, description: 'Platform users, business filtering, and notifications' }
+  { email: 'cashier@demo.stratifypos.app', name: 'Jamie Cruz', role: 'cashier' as DemoRole, description: 'Checkout, sales history, and attendance' }
 ];
 const daysAgo = (offset: number, hours = 12) => {
   const value = new Date();
@@ -170,7 +169,6 @@ export interface DemoAppointment {
  status:'pending'|'confirmed'|'rescheduled'|'completed'|'cancelled';
 }
 export interface DemoAttendanceRecord {id:string;staffId:string;branchId:string;clockIn:string;clockOut:string|null}
-export interface DemoPlatformNotice {id:string;title:string;message:string;date:string;read:boolean;kind:'action'|'info'}
 export interface DemoExtension {
  version:2;
  balances:Record<string,Record<string,number>>;
@@ -178,7 +176,7 @@ export interface DemoExtension {
  registers:DemoRegister[];refunds:DemoRefund[];holds:DemoHold[];
  plans:DemoServicePlan[];customers:DemoCustomer[];entitlements:DemoEntitlement[];
  requests:DemoQrRequest[];tickets:DemoKitchenTicket[];
- appointments:DemoAppointment[];attendanceLog:DemoAttendanceRecord[];platformNotifications:DemoPlatformNotice[];
+ appointments:DemoAppointment[];attendanceLog:DemoAttendanceRecord[];
 }
 export const EXTENSION_KEY='stratify-demo-workflows-v2';
 export const newId=()=>globalThis.crypto?.randomUUID?.()||'D-'+Date.now()+'-'+Math.random().toString(36).slice(2);
@@ -203,12 +201,7 @@ export function seedExtension(products:DemoProduct[]=seedProducts):DemoExtension
   attendanceLog:[{id:'att1',staffId:'s3',branchId:'b1',clockIn:daysAgo(1,9),clockOut:daysAgo(1,17)},
     {id:'att2',staffId:'s2',branchId:'b2',clockIn:daysAgo(2,9),clockOut:daysAgo(2,17)},
     {id:'att3',staffId:'s1',branchId:'b1',clockIn:daysAgo(3,9),clockOut:daysAgo(3,17)}],
-  platformNotifications:[
-   {id:'note1',title:'Payment awaiting review',message:'Example Coffee · Business subscription',date:daysAgo(0,10),read:false,kind:'action'},
-   {id:'note2',title:'New free trial',message:'Sample Gym started a trial',date:daysAgo(0,9),read:false,kind:'info'},
-   {id:'note3',title:'Trial ending soon',message:'Example Clinic · 3 days remaining',date:daysAgo(1,13),read:false,kind:'action'},
-   {id:'note4',title:'Subscription renewed',message:'Sample Retail · Business plan',date:daysAgo(2,13),read:true,kind:'info'}
-  ]};
+};
 }
 export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension {
  try {
@@ -246,10 +239,10 @@ export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension
           (!p.kind&&legacyKitchenFoodCategories.has(p.category.trim().toLowerCase())));
       });
     });
-    return {...value,balances,tickets,
+    const {platformNotifications:_removedPlatformNotifications,...safeValue}=value;
+    return {...safeValue,balances,tickets,
       appointments:Array.isArray(value.appointments)?value.appointments:seedExtension(products).appointments,
       attendanceLog:Array.isArray(value.attendanceLog)?value.attendanceLog:seedExtension(products).attendanceLog,
-      platformNotifications:Array.isArray(value.platformNotifications)?value.platformNotifications:seedExtension(products).platformNotifications,
       plans:(value.plans||[]).map((p:DemoServicePlan)=>({...p,sellThroughPos:p.sellThroughPos??(p.id==='plan1'||p.id==='plan2')}))};
   }
  }catch{}
