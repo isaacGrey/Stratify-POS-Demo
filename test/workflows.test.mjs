@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
 import {transformSync} from 'esbuild';
 
 // Compile only the pure fixture/state functions; test runtime logic without a browser
@@ -315,8 +315,9 @@ test('new browser demo data models are initialized and preserve compatibility',(
  assert.equal(data.kitchenEnabled,true);
  assert(extension.appointments.length>=2);
  assert(extension.attendanceLog.length>=3);
- assert(extension.platformNotifications.some(n=>!n.read));
- assert(demo.demoAccounts.find(account=>account.role==='super_admin'));
+ assert.deepEqual(demo.demoAccounts.map(account=>account.role),['owner','manager','cashier']);
+ assert.equal(demo.demoAccounts.some(account=>account.email==='admin@demo.stratifypos.app'),false);
+ assert.equal('platformNotifications' in extension,false);
 });
 test('appointment validator protects customer details and prevents conflicting resource bookings',()=>{
  const state=demo.seedExtension(demo.initialDemoData().products);
@@ -348,20 +349,40 @@ test('genuine PDF/XLSX exports have expected file headers and well-formed ZIP ce
  assert(Buffer.from(pdf).includes(Buffer.from('xref')));
  assert(pdf.length>200);
 });
-test('new demo screens retain cashier access, kitchen restriction and simulated platform roles',()=>{
+test('new demo screens retain cashier access, kitchen restriction and appointment workflows',()=>{
  const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
- const admin=readFileSync(new URL('../src/demo-admin.tsx',import.meta.url),'utf8');
  const appts=readFileSync(new URL('../src/demo-appointments.tsx',import.meta.url),'utf8');
  const work=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
- assert(ui.includes("role==='super_admin'"));
- assert(ui.includes("data.businessType==='non_food'||!data.kitchenEnabled"));
+ assert(!ui.includes("role==='super_admin'"));
+ assert(!ui.includes('platform_users'));
+ assert(!ui.includes('DemoPlatformUsers'));
+ assert(!ui.includes('DemoPlatformDashboard'));
+ assert(!ui.includes('DemoNotificationBell'));
+ assert(ui.includes('if(!account)return <Login onLogin={login}/>;'));
+ assert.equal(existsSync(new URL('../src/demo-admin.tsx',import.meta.url)),false);
+  assert(ui.includes("data.businessType==='non_food'||!data.kitchenEnabled"));
  assert(ui.includes("'appointments'"));
  assert(ui.includes('downloadDemoReport'));
- assert(ui.includes('DemoNotificationBell'));
- assert(admin.includes('Filter users by business'));
- assert(admin.includes('Platform notifications'));
  assert(appts.includes('validateDemoAppointment'));
  assert(appts.includes('Calendar'));
  assert(work.includes('demo-membership-summary'));
  assert(work.includes("readonly=role==='cashier'"));
+});
+
+test('public demo does not offer a platform admin role or platform administration route',()=>{
+ const source=readFileSync(new URL('../src/demo-data.ts',import.meta.url),'utf8');
+ const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
+ assert.deepEqual(demo.demoAccounts.map(x=>x.email),[
+   'owner@demo.stratifypos.app',
+   'manager@demo.stratifypos.app',
+   'cashier@demo.stratifypos.app'
+ ]);
+ assert(!source.includes("'super_admin'"));
+ assert(!ui.includes('platform_users'));
+ assert(!ui.includes("from './demo-admin'"));
+ // A previously saved admin session does not match the allowed account list,
+ // so the app renders the demo login instead of giving access to any dashboard.
+ const previous='admin@demo.stratifypos.app';
+ assert.equal(demo.demoAccounts.find(account=>account.email===previous),undefined);
+ assert(ui.includes("if(!account)return <Login onLogin={login}/>;"));
 });

@@ -4,7 +4,7 @@
 
 ## Try the demo
 
-Use any public role selector below, all with password `demo1234`:
+Use any of the **three merchant demo roles** below, all with password `demo1234`. Platform Super Admin access is deliberately excluded from the public demo:
 
 | Role | Email | Demo privileges |
 | --- | --- | --- |
