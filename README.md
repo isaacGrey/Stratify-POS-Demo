@@ -10,7 +10,7 @@ Use any of the **three merchant demo roles** below, all with password `demo1234`
 | --- | --- | --- |
 | Owner | owner@demo.stratifypos.app | All demonstration workflows |
 | Manager | manager@demo.stratifypos.app | Management and operational modules |
-| Cashier | cashier@demo.stratifypos.app | Checkout, orders, register, attendance, kitchen |
+| Cashier | cashier@demo.stratifypos.app | Checkout, own orders/register/attendance, kitchen, membership lookup, appointments |
 
 All passwords are **display-only demonstration selectors**, not real authentication. Changing the account changes available navigation. Never enter personal, payment, clinical or confidential data into a public demo.
 
@@ -56,3 +56,11 @@ Use **Customer Memberships → Plans → Create linked plan** to specify a plan 
 On mobile, the full sidebar navigation is independently vertically scrollable with touch gestures and safe-area padding. This repository remains a **browser-local showcase**, not a connected server, payment processor or subscription billing implementation.
 
 For cash transactions, a **full refund of a paid POS membership** cancels a newly granted entitlement or restores the previous expiry of a reversed renewal. Partial membership refunds and refunds after subsequent membership changes are rejected in this demo to avoid inconsistent access rights. No real money changes hands.
+
+### Development parity (November 24, 2026)
+
+- Owner/Manager can access printable, locally generated table QR PNGs and public sample menus. These links deliberately show only seeded sample data; no real payment, token issuance, cross-device order synchronization or production API is available.
+- Kitchen tickets are sorted by original order creation date, newest first, and completed tickets are hidden by default. Legacy invalid-ticket cleanup retains completed valid tickets.
+- Cashiers land directly in POS, see their own timecards and register/sales history, and retain read-only membership lookup plus appointment access. Team management, reports, catalog and other management routes are not rendered for cashiers. QR menus are restricted to food workspaces.
+- Product removal is reversible (soft removal); sales and stock history are retained. Linked membership catalog items are managed in Memberships. Stock measurement units default to pcs and can change only on unused zero-balance stock items; the demo supports whole stock units, not recipe/measurement conversions. Removing stock tracking uses the same safeguard.
+- Platform trial administration, affiliate commissions/payouts and business archival remain outside the public demo; Super Admin is not restored.

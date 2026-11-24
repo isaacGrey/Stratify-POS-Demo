@@ -79,3 +79,5 @@
 @media(max-width:800px){.demo-membership-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:520px){.demo-membership-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
 .demo-appt-filters .demo-toolbar>*{width:100%;min-width:0}}
+
+.demo-qr-panel{padding:16px;display:grid;gap:12px}.demo-qr-preview{width:fit-content;padding:12px;background:#fff;border:1px solid #e5e7eb;border-radius:8px}.demo-qr-preview canvas,.demo-qr-preview img{max-width:100%;height:auto}.demo-public-menu{max-width:800px;padding:20px;margin:0 auto;display:grid;gap:14px}.demo-public-menu .demo-product-tile{cursor:default}.demo-kds-options{margin-bottom:12px}.demo-attendance .demo-inline-form{flex-wrap:wrap}
