@@ -392,7 +392,7 @@ test('public demo does not offer a platform admin role or platform administratio
 test('explicit role routes fail closed, cashier lands in POS and food-only routes are gated',()=>{
  for(const role of ['owner','manager','cashier','staff']){
   assert.equal(demo.canViewDemoPage(role,'unknown','food',true),false);
-  assert.equal(demo.canViewDemoPage(role,'pos','food',true),true);
+  assert.equal(demo.canViewDemoPage(role,'pos','food',true),role!=='staff');
   assert.equal(demo.canViewDemoPage(role,'qr','non_food',true),false);
   assert.equal(demo.canViewDemoPage(role,'kitchen','food',false),false);
  }
@@ -488,3 +488,5 @@ test('UI exposes local-only simulator, gated POS membership and attendance under
  assert(ui.includes('demoAccess'));assert(ui.includes('recordDemoAttendance'));assert(!ui.includes('<PersonalAttendance'));
  assert(ui.includes('hasMembership&&!membershipAllowed'));assert(ui.includes('canAccountView(data,account,id)'));assert(preview.includes('deleteDemoBusiness'));assert(preview.includes('Workspace enabled'));assert(!preview.includes('fetch('));
 });
+
+test('staff landing and held membership safeguards remain explicit',()=>{const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');assert(ui.includes("role==='staff'&&permitted('staff')?'staff'"));assert(ui.includes('This held order contains an unavailable membership.'));});

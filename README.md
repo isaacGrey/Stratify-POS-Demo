@@ -62,9 +62,9 @@ For cash transactions, a **full refund of a paid POS membership** cancels a newl
 
 - Owner/Manager can access printable, locally generated table QR PNGs and public sample menus. These links deliberately show only seeded sample data; no real payment, token issuance, cross-device order synchronization or production API is available.
 - Kitchen tickets are sorted by original order creation date, newest first, and completed tickets are hidden by default. Legacy invalid-ticket cleanup retains completed valid tickets.
-- Cashiers land directly in POS, see their own timecards and register/sales history, and retain read-only membership lookup plus appointment access. Team management, reports, catalog and other management routes are not rendered for cashiers. QR menus are restricted to food workspaces.
+- Cashiers land directly in POS, use Team & Attendance for personal timecards, and have their own register/sales history. Read-only membership lookup and appointment access require explicit approval. Team management, reports, catalog and other management routes are not rendered for cashiers. QR menus are restricted to food workspaces.
 - Product removal is reversible (soft removal); sales and stock history are retained. Linked membership catalog items are managed in Memberships. Stock measurement units default to pcs and can change only on unused zero-balance stock items; the demo supports whole stock units, not recipe/measurement conversions. Removing stock tracking uses the same safeguard.
-- Platform trial administration and business archival remain outside the public demo; Super Admin is not restored. The separate affiliate partner preview is available from the login page and demonstrates fictional referral metrics, commissions and a simulated payout request. It has no live registration, money movement, or merchant-data access.
+- Platform trial administration and real Super Admin accounts remain outside the public demo; fictional access and deletion workflows are available in the simulator. The separate affiliate partner preview is available from the login page and demonstrates fictional referral metrics, commissions and a simulated payout request. It has no live registration, money movement, or merchant-data access.
 
 ### Development Update 2
 
