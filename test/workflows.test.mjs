@@ -301,7 +301,7 @@ test('full refund of renewal restores previous expiry and rejects reversing olde
 test('cashier demo navigation exposes memberships with read-only reception workflow',()=>{
  const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
  const service=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
- assert(ui.includes("'kitchen','guide','memberships','appointments'"));
+ assert(demo.canViewDemoPage('cashier','memberships','food',true));
  assert(service.includes("readonly=role==='cashier'"));
  assert(service.includes("{!readonly&&<Section title=\"Issue customer membership\""));
  assert(service.includes("{!readonly&&e.status==='active'"));
@@ -360,7 +360,7 @@ test('new demo screens retain cashier access, kitchen restriction and appointmen
  assert(!ui.includes('DemoNotificationBell'));
  assert(ui.includes('if(!account)return <Login onLogin={login}/>;'));
  assert.equal(existsSync(new URL('../src/demo-admin.tsx',import.meta.url)),false);
-  assert(ui.includes("data.businessType==='non_food'||!data.kitchenEnabled"));
+  assert(!demo.canViewDemoPage('cashier','kitchen','non_food',true));
  assert(ui.includes("'appointments'"));
  assert(ui.includes('downloadDemoReport'));
  assert(appts.includes('validateDemoAppointment'));
@@ -385,4 +385,59 @@ test('public demo does not offer a platform admin role or platform administratio
  const previous='admin@demo.stratifypos.app';
  assert.equal(demo.demoAccounts.find(account=>account.email===previous),undefined);
  assert(ui.includes("if(!account)return <Login onLogin={login}/>;"));
+});
+
+test('explicit role routes fail closed, cashier lands in POS and food-only routes are gated',()=>{
+ for(const role of ['owner','manager','cashier']){
+  assert.equal(demo.canViewDemoPage(role,'unknown','food',true),false);
+  assert.equal(demo.canViewDemoPage(role,'pos','food',true),true);
+  assert.equal(demo.canViewDemoPage(role,'qr','non_food',true),false);
+  assert.equal(demo.canViewDemoPage(role,'kitchen','food',false),false);
+ }
+ for(const page of ['overview','staff','products','inventory','settings','qr','reports','guide'])assert.equal(demo.canViewDemoPage('cashier',page,'food',true),false);
+ assert.equal(demo.canViewDemoPage('cashier','appointments','food',true),true);
+ assert.equal(demo.canViewDemoPage(undefined,'pos','food',true),false);
+});
+test('personal timecards do not reveal other employees',()=>{
+ const ext=demo.seedExtension();
+ assert(ext.attendanceLog.length>1);
+ assert.deepEqual(demo.personalAttendance(ext.attendanceLog,'s3').map(r=>r.staffId),['s3']);
+ assert.deepEqual(demo.personalAttendance(ext.attendanceLog,'missing'),[]);
+});
+test('stock unit configuration cannot change for used items or positive stock',()=>{
+ const data=demo.initialDemoData(),ext=demo.seedExtension(data.products);
+ const product=data.products.find(p=>p.id==='p1');
+ assert(demo.stockConfigurationError(product,ext,data.orders));
+ const fresh={...product,id:'unused',stock:0,unit:'pcs'};
+ assert.equal(demo.stockConfigurationError(fresh,ext,data.orders),null);
+ const hold={id:'h',branchId:'b1',cashier:'test',createdAt:'2026-01-01',items:[{productId:'unused',qty:1}]};
+ assert(demo.stockConfigurationError(fresh,{...ext,holds:[hold]},[]));
+ assert(demo.catalogRemovalError(data.products.find(p=>p.id==='svc1')));
+ assert.equal(demo.catalogRemovalError(product),null);
+});
+test('kitchen order time rather than status update time determines newest-first sorting',()=>{
+ const rows=[{ticket:{id:'a',orderId:'old',status:'pending'},lines:[]},{ticket:{id:'b',orderId:'new',status:'pending'},lines:[]},{ticket:{id:'c',orderId:'done',status:'completed'},lines:[]}];
+ const sales=[{id:'old',date:'2026-01-01'},{id:'new',date:'2026-01-02'},{id:'done',date:'2026-01-03'}];
+ assert.deepEqual(demo.newestKitchenTickets(rows,sales,false).map(r=>r.ticket.id),['b','a']);
+ assert.deepEqual(demo.newestKitchenTickets(rows,sales,true).map(r=>r.ticket.id),['c','b','a']);
+ assert.equal(rows[0].ticket.id,'a');
+});
+test('QR encoder is local and public menu uses only seeded catalog data',()=>{
+ const ui=readFileSync(new URL('../src/demo-qr.tsx',import.meta.url),'utf8');
+ assert(ui.includes('initialDemoData()'));
+ assert(ui.includes('toBlob'));
+ assert(ui.includes('demoMenu'));
+ assert(existsSync(new URL('../public/vendor/qrcode.min.js',import.meta.url)));
+ assert(existsSync(new URL('../public/vendor/LICENSE-qrcodejs.txt',import.meta.url)));
+});
+
+test('affiliate preview is separate from merchant accounts and never uses real payout APIs',()=>{
+ const source=readFileSync(new URL('../src/demo-affiliate.tsx',import.meta.url),'utf8');
+ const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
+ assert(ui.includes('demoPartner'));
+ assert(source.includes('Simulate payout request'));
+ assert(source.includes('Active paid subscriptions'));
+ assert(!source.includes('fetch('));
+ assert(!source.includes('localStorage'));
+ assert.deepEqual(demo.demoAccounts.map(a=>a.role),['owner','manager','cashier']);
 });

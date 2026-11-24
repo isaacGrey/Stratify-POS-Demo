@@ -1,0 +1,26 @@
+import React,{useState} from 'react';
+import {ArrowLeft,Copy,Wallet} from 'lucide-react';
+const referrals=[{name:'Sample Cafe',plan:'Business',status:'Active paid',sales:600000},{name:'Sample Fitness',plan:'Pro',status:'Active paid',sales:900000},{name:'Sample Retail',plan:'Basic',status:'Trial',sales:0}];
+const commissions=[{name:'Sample Cafe',amount:120000,state:'Available'},{name:'Sample Fitness',amount:180000,state:'On hold'}];
+const money=(n:number)=>new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(n/100);
+export function AffiliatePreview(){
+ const [tab,setTab]=useState<'referrals'|'commissions'|'payouts'>('referrals');
+ const [requested,setRequested]=useState(false);
+ const [notice,setNotice]=useState('');
+ const rate=20,minimum=100000,available=commissions.filter(c=>c.state==='Available').reduce((n,c)=>n+c.amount,0);
+ const pending=commissions.filter(c=>c.state==='On hold').reduce((n,c)=>n+c.amount,0);
+ const reserved=requested?available:0;
+ const code='DEMO-PARTNER';
+ const link=new URL('/?demoPartner=1&ref='+code,window.location.origin).toString();
+ async function copy(value:string){try{await navigator.clipboard.writeText(value);setNotice('Copied sample referral information.');}catch{setNotice('Clipboard unavailable. Select and copy the displayed value.');}}
+ function request(){if(requested||available<minimum)return;setRequested(true);setTab('payouts');setNotice('Sample payout request recorded for this preview only. No money will be transferred.');}
+ const metrics=[['Lifetime commissions',money(available+pending)],['Available balance',money(available-reserved)],['Pending release',money(pending)],['Paid out',money(0)],['Total referred businesses',String(referrals.length)],['Successful registrations',String(referrals.length)],['Active paid subscriptions',String(referrals.filter(r=>r.status==='Active paid').length)],['Verified subscription sales',money(referrals.reduce((n,r)=>n+r.sales,0))]];
+ return <main className="demo-partner"><div className="demo-disclaimer">PORTFOLIO DEMO — SIMULATED AFFILIATE RECORDS</div><a className="demo-btn secondary" href="/"><ArrowLeft size={16}/> Merchant demo</a><div className="demo-heading"><div><div className="demo-eyebrow">STRATIFYPOS PARTNERS</div><h1>Affiliate portal preview</h1><p>Explore referrals, verified subscription commissions and payout tracking with fictional records. No affiliate account or real financial connection is created.</p></div></div>
+ {new URLSearchParams(window.location.search).get('ref')===code&&<p className="demo-muted">Sample referral link recognized. Live business registration is not part of this preview.</p>}
+ <div className="demo-metrics">{metrics.map(([label,value])=><div className="demo-metric" key={label}><span>{label}</span><strong>{value}</strong><small>Illustrative sample</small></div>)}</div>
+ <div className="demo-two-col"><section className="demo-card"><div className="demo-card-title"><h2>Referral link</h2></div><div className="demo-partner-inner"><label className="demo-label">Sample code<input readOnly value={code}/></label><label className="demo-label">Sample link<input readOnly value={link}/></label><div className="demo-inline-form"><button className="demo-btn secondary" onClick={()=>void copy(code)}><Copy size={14}/> Copy code</button><button className="demo-btn secondary" onClick={()=>void copy(link)}><Copy size={14}/> Copy link</button></div></div></section>
+ <section className="demo-card"><div className="demo-card-title"><h2>Commission and payout rules</h2></div><div className="demo-partner-inner"><p>Sample commission rate: {rate}% · release hold: 14 days</p><p>Minimum payout: {money(minimum)} · Reserved: {money(reserved)}</p><button className="demo-btn primary" disabled={requested||available<minimum} onClick={request}><Wallet size={15}/> Simulate payout request</button><small>Illustrative settings only. A request never transfers money.</small></div></section></div>
+ {notice&&<p role="status">{notice}</p>}<div className="demo-inline-form">{(['referrals','commissions','payouts'] as const).map(t=><button key={t} className={'demo-btn '+(tab===t?'primary':'secondary')} onClick={()=>setTab(t)}>{t==='referrals'?'Referred businesses':t==='commissions'?'Commissions':'Payout history'}</button>)}</div>
+ <section className="demo-card"><div className="demo-table-scroll"><table className="demo-table"><thead><tr>{(tab==='referrals'?['Business','Plan','Subscription','Verified sales']:tab==='commissions'?['Business','Commission','Status']:['Reference','Amount','Status']).map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{tab==='referrals'?referrals.map(r=><tr key={r.name}><td>{r.name}</td><td>{r.plan}</td><td>{r.status}</td><td>{money(r.sales)}</td></tr>):tab==='commissions'?commissions.map(c=><tr key={c.name}><td>{c.name}</td><td>{money(c.amount)}</td><td>{requested&&c.state==='Available'?'Reserved':c.state}</td></tr>):requested?<tr><td>DEMO-PAYOUT-001</td><td>{money(reserved)}</td><td>Awaiting sample review</td></tr>:<tr><td colSpan={3}>No sample payout requests yet.</td></tr>}</tbody></table></div></section>
+ <p className="demo-muted">This standalone partner preview does not access merchant records. Reloading restores the fictional starting balance.</p></main>;
+}

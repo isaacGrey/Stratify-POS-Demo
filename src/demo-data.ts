@@ -7,7 +7,7 @@ export type DemoOrderType = 'standard' | 'takeout' | 'dine_in' | 'delivery';
 
 export interface DemoProduct {
   id: string; name: string; category: string; price: number; cost: number;
-  stock: number; reorder: number; emoji: string; active: boolean; kind?:DemoKind; itemType?:DemoItemType; itemClass?:DemoItemClass; trackInventory?:boolean; sku?:string; barcode?:string;
+  stock: number; reorder: number; emoji: string; active: boolean; kind?:DemoKind; itemType?:DemoItemType; itemClass?:DemoItemClass; trackInventory?:boolean; sku?:string; barcode?:string; unit?:string;
 }
 export interface DemoBranch { id: string; name: string; location: string; active: boolean; }
 export interface DemoSaleLine { productId: string; name: string; price: number; qty: number; }
@@ -147,7 +147,7 @@ export function tracksStock(p:DemoProduct):boolean {
 }
 export function normalizeProduct(p:DemoProduct):DemoProduct {
  const itemType=productType(p),itemClass=productClass(p),trackInventory=tracksStock(p);
- return {...p,itemType,itemClass,trackInventory,
+ return {...p,itemType,itemClass,trackInventory,unit:p.unit?.trim()||'pcs',
    kind:itemClass==='food_beverage'?'food_beverage':itemType==='physical'?(trackInventory?'physical':'non_stock'):'service',
    stock:trackInventory?p.stock:0,reorder:trackInventory?p.reorder:0};
 }
@@ -357,4 +357,29 @@ export function validateDemoAppointment(existing:readonly DemoAppointment[],draf
    !['cancelled','completed'].includes(item.status)&&
    Date.parse(item.start)<end&&Date.parse(item.end)>start))
   throw new Error('This room or staff resource already has an appointment at the selected time');
+}
+
+export const merchantPages=['overview','pos','products','inventory','warehouse','purchasing','memberships','appointments','register','qr','kitchen','refunds','guide','orders','reports','staff','branches','settings'] as const;
+export type MerchantPage=typeof merchantPages[number];
+const cashierPages:readonly MerchantPage[]=['pos','orders','register','kitchen','memberships','appointments'];
+export function canViewDemoPage(role:DemoRole|undefined,page:string,businessType:DemoData['businessType'],kitchenEnabled:boolean):boolean {
+ if(!role||!merchantPages.includes(page as MerchantPage))return false;
+ if(page==='qr'&&businessType!=='food')return false;
+ if(page==='kitchen'&&(businessType!=='food'||kitchenEnabled!==true))return false;
+ return role==='owner'||role==='manager'||(role==='cashier'&&cashierPages.includes(page as MerchantPage));
+}
+export function personalAttendance(records:readonly DemoAttendanceRecord[],staffId:string):DemoAttendanceRecord[] {
+ return records.filter(r=>r.staffId===staffId).sort((a,b)=>Date.parse(b.clockIn)-Date.parse(a.clockIn));
+}
+export function catalogRemovalError(product:DemoProduct):string|null {
+ return productType(product)==='membership'?'Manage linked membership availability in Customer Memberships.':null;
+}
+export function stockConfigurationError(product:DemoProduct,ext:DemoExtension,orders:readonly DemoSale[]):string|null {
+ if(Object.values(ext.balances).some(branch=>(branch[product.id]||0)!==0))return 'Stock must be zero at every branch.';
+ if(orders.some(o=>o.lines.some(l=>l.productId===product.id))||ext.movements.some(m=>m.productId===product.id)||ext.purchases.some(p=>p.productId===product.id)||ext.holds.some(h=>h.items.some(i=>i.productId===product.id))||ext.requests.some(r=>r.items.some(i=>i.productId===product.id))||ext.plans.some(p=>p.productId===product.id))return 'This item is referenced by existing records; its inventory configuration cannot be changed.';
+ return null;
+}
+export function newestKitchenTickets<T extends {ticket:{id:string;orderId:string;status:string};lines:unknown}>(rows:readonly T[],orders:readonly Pick<DemoSale,'id'|'date'>[],showCompleted:boolean):T[] {
+ const dates=new Map(orders.map(o=>[o.id,Date.parse(o.date)]));
+ return rows.filter(r=>showCompleted||r.ticket.status!=='completed').sort((a,b)=>(dates.get(b.ticket.orderId)||0)-(dates.get(a.ticket.orderId)||0)||b.ticket.id.localeCompare(a.ticket.id));
 }
