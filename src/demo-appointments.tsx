@@ -9,7 +9,7 @@ const newDraft=(data:DemoData):DemoAppointment=>({id:'',branchId:data.branches[0
  start:localValue(new Date(Date.now()+3600000).toISOString()),
  end:localValue(new Date(Date.now()+5400000).toISOString()),status:'pending'});
 const statusOptions=['pending','confirmed','rescheduled','completed','cancelled'] as const;
-export function DemoAppointments({data,ext,update,notify}:Props){
+export function DemoAppointments({data,ext,update,notify,membershipAllowed}:Props & {membershipAllowed:boolean}){
  const [draft,setDraft]=useState<DemoAppointment|null>(null),[error,setError]=useState('');
  const [query,setQuery]=useState(''),[status,setStatus]=useState('all'),[branch,setBranch]=useState('all');
  const [view,setView]=useState<'list'|'calendar'>('list'),[date,setDate]=useState('all');
@@ -70,8 +70,8 @@ export function DemoAppointments({data,ext,update,notify}:Props){
   {draft&&<div className="demo-modal-backdrop" onMouseDown={()=>setDraft(null)}><div className="demo-modal demo-appt-modal" role="dialog" aria-modal="true" aria-label="Appointment" onMouseDown={e=>e.stopPropagation()}>
    <h2>{draft.id?'Manage appointment':'Book appointment'}</h2><form onSubmit={save}><div className="demo-form-grid">
     <label className="demo-label">Client name<input required maxLength={160} value={draft.customerName} onChange={e=>set('customerName',e.target.value)}/></label>
-    <label className="demo-label">Known customer<select value={draft.customerId||''} onChange={e=>{const person=ext.customers.find(x=>x.id===e.target.value);setDraft(d=>d?{...d,customerId:person?.id||null,customerName:person?.name||d.customerName}:d)}}>
-     <option value="">Walk-in / unlinked</option>{ext.customers.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>
+    {membershipAllowed&&<label className="demo-label">Known customer<select value={draft.customerId||''} onChange={e=>{const person=ext.customers.find(x=>x.id===e.target.value);setDraft(d=>d?{...d,customerId:person?.id||null,customerName:person?.name||d.customerName}:d)}}>
+     <option value="">Walk-in / unlinked</option>{ext.customers.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>}
     <label className="demo-label">Service<input required maxLength={160} value={draft.serviceName} onChange={e=>set('serviceName',e.target.value)}/></label>
     <label className="demo-label">Contact<input maxLength={180} value={draft.contact} onChange={e=>set('contact',e.target.value)}/></label>
     <label className="demo-label">Branch<select required value={draft.branchId} onChange={e=>set('branchId',e.target.value)}>

@@ -4,13 +4,14 @@
 
 ## Try the demo
 
-Use any of the **three merchant demo roles** below, all with password `demo1234`. Platform Super Admin access is deliberately excluded from the public demo:
+Use any of the **four merchant demo roles** below, all with password `demo1234`. Real platform Super Admin access is deliberately excluded; the login page links to a fictional platform access simulator:
 
 | Role | Email | Demo privileges |
 | --- | --- | --- |
 | Owner | owner@demo.stratifypos.app | All demonstration workflows |
 | Manager | manager@demo.stratifypos.app | Management and operational modules |
-| Cashier | cashier@demo.stratifypos.app | Checkout, own orders/register/attendance, kitchen, membership lookup, appointments |
+| Cashier | cashier@demo.stratifypos.app | Checkout, own orders/register, kitchen, attendance; membership lookup and appointments when approved |
+| Staff | staff@demo.stratifypos.app | Attendance without POS access; kitchen where enabled |
 
 All passwords are **display-only demonstration selectors**, not real authentication. Changing the account changes available navigation. Never enter personal, payment, clinical or confidential data into a public demo.
 
@@ -61,6 +62,12 @@ For cash transactions, a **full refund of a paid POS membership** cancels a newl
 
 - Owner/Manager can access printable, locally generated table QR PNGs and public sample menus. These links deliberately show only seeded sample data; no real payment, token issuance, cross-device order synchronization or production API is available.
 - Kitchen tickets are sorted by original order creation date, newest first, and completed tickets are hidden by default. Legacy invalid-ticket cleanup retains completed valid tickets.
-- Cashiers land directly in POS, see their own timecards and register/sales history, and retain read-only membership lookup plus appointment access. Team management, reports, catalog and other management routes are not rendered for cashiers. QR menus are restricted to food workspaces.
+- Cashiers land directly in POS, use Team & Attendance for personal timecards, and have their own register/sales history. Read-only membership lookup and appointment access require explicit approval. Team management, reports, catalog and other management routes are not rendered for cashiers. QR menus are restricted to food workspaces.
 - Product removal is reversible (soft removal); sales and stock history are retained. Linked membership catalog items are managed in Memberships. Stock measurement units default to pcs and can change only on unused zero-balance stock items; the demo supports whole stock units, not recipe/measurement conversions. Removing stock tracking uses the same safeguard.
-- Platform trial administration and business archival remain outside the public demo; Super Admin is not restored. The separate affiliate partner preview is available from the login page and demonstrates fictional referral metrics, commissions and a simulated payout request. It has no live registration, money movement, or merchant-data access.
+- Platform trial administration and real Super Admin accounts remain outside the public demo; fictional access and deletion workflows are available in the simulator. The separate affiliate partner preview is available from the login page and demonstrates fictional referral metrics, commissions and a simulated payout request. It has no live registration, money movement, or merchant-data access.
+
+### Development Update 2
+
+- Team & Attendance replaces the POS attendance widget. All eligible sample employees select their name, enter their sample email and `demo1234`, and verify each clock-in, break and clock-out action. Non-managers see only their own timecards. Staff can use attendance without POS.
+- The login page links to a separate browser-local platform access simulator. Memberships and appointments start disabled; explicit business or employee Allow enables them within role limits. Business and employee Block take precedence. Blocked accounts are removed from the login picker; blocked pages and membership items are hidden. Storage changes refresh other tabs in the same browser.
+- The simulator supports confirmed user deletion (only-owner and history guards) and purging the entire fictional sample business, including local users and branches. No real Super Admin account or backend exists. Live financial-retention protections are not bypassed. Reset restores original sample data and default permissions, including disabled opt-in modules.
