@@ -430,3 +430,14 @@ test('QR encoder is local and public menu uses only seeded catalog data',()=>{
  assert(existsSync(new URL('../public/vendor/qrcode.min.js',import.meta.url)));
  assert(existsSync(new URL('../public/vendor/LICENSE-qrcodejs.txt',import.meta.url)));
 });
+
+test('affiliate preview is separate from merchant accounts and never uses real payout APIs',()=>{
+ const source=readFileSync(new URL('../src/demo-affiliate.tsx',import.meta.url),'utf8');
+ const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
+ assert(ui.includes('demoPartner'));
+ assert(source.includes('Simulate payout request'));
+ assert(source.includes('Active paid subscriptions'));
+ assert(!source.includes('fetch('));
+ assert(!source.includes('localStorage'));
+ assert.deepEqual(demo.demoAccounts.map(a=>a.role),['owner','manager','cashier']);
+});

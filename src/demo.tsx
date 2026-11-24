@@ -17,6 +17,7 @@ import {usesFoodFulfillment,saleOrderType,needsKitchenTicket,kitchenLineItems} f
 import {DemoAppointments} from './demo-appointments';
 import {downloadDemoReport} from './demo-exports';
 import {PublicDemoMenu} from './demo-qr';
+import {AffiliatePreview} from './demo-affiliate';
 import './demo.css';
 
 type Page = 'overview'|'pos'|'products'|'inventory'|'warehouse'|'purchasing'|'memberships'|'register'|'qr'|'kitchen'|'refunds'|'guide'|'orders'|'reports'|'staff'|'branches'|'settings'|'appointments';
@@ -81,6 +82,7 @@ function App() {
   function logout(){setEmail('');try{sessionStorage.removeItem(DEMO_SESSION_KEY);}catch{}setPage('overview');}
   function navigate(next:Page){if(!permitted(next))return;setPage(next);setMobile(false);}
   useEffect(()=>{document.title='StratifyPOS • Interactive Portfolio Demo';},[]);
+  if(new URLSearchParams(window.location.search).has('demoPartner'))return <AffiliatePreview/>;
   if(new URLSearchParams(window.location.search).has('demoMenu'))return <PublicDemoMenu/>;
   if(!account)return <Login onLogin={login}/>;
   const visible=menuItems.filter(item=>permitted(item.id));
@@ -97,7 +99,7 @@ function App() {
     kitchen:<KitchenWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
     refunds:<RefundWorkflows {...{data: data,ext: extension,role:role!,actor:account.name,update:updateExtension,change,notify}}/>,
     guide:<DemoFeatureGuide/>,
-    inventory:<Inventory data={data} ext={extension} updateExtension={updateExtension} notify={notify}/>,
+    inventory:<Inventory data={data} ext={extension} updateExtension={updateExtension} change={change} notify={notify}/>,
     orders:<Orders data={role==='cashier'?{...data,orders:data.orders.filter(o=>o.cashier===account.name)}:data}/>,
     reports:<Reports data={data}/>,
     staff:<Staff data={data} ext={extension} updateExtension={updateExtension} account={account} change={change} notify={notify}/>,
@@ -128,7 +130,7 @@ function Login({onLogin}:{onLogin:(account:Account)=>void}) {
   const [error,setError]=useState('');
   function submit(event:React.FormEvent){event.preventDefault();const account=demoAccounts.find(a=>a.email===selected);if(!account||password!==DEMO_PASSWORD){setError('Use the demo password shown below.');return;}onLogin(account);}
   return <div className="demo-login"><div className="demo-login-intro"><div className="demo-login-brand"><img src="/stratify-logo.png" alt=""/><strong>Stratify<span>POS</span></strong></div><div className="demo-login-eyebrow"><span className="demo-live-dot"/> INTERACTIVE PORTFOLIO SHOWCASE</div><h1>Your business.<br/>One smarter workspace<span>.</span></h1><p>Explore a multi-industry POS: try checkout, stock transfers, purchasing, memberships, customer QR orders, kitchen tickets and reporting.</p><div className="demo-preview"><div className="demo-preview-label"><span>THE EXPERIENCE</span><Pill tone="green">Explore freely</Pill></div><img src="/previews/dashboard.png" alt="Screenshot of the StratifyPOS dashboard"/></div><div className="demo-login-footer">Built as a demonstration of SaaS POS workflows, frontend engineering, and business systems.</div></div>
-    <div className="demo-login-right"><div className="demo-login-card"><Pill tone="amber"><ShieldCheck size={13}/> PUBLIC DEMO — NO REAL DATA</Pill><h2>Explore StratifyPOS</h2><p className="demo-muted">Choose a sample account to see the system from different roles. No registration required.</p><div className="demo-role-picker">{demoAccounts.map(a=><button type="button" onClick={()=>{setSelected(a.email);setPassword(DEMO_PASSWORD);setError('');}} className={'demo-role '+(selected===a.email?'selected':'')} key={a.email}><div className="demo-role-avatar">{a.name[0]}</div><div><strong>{a.role[0].toUpperCase()+a.role.slice(1)}</strong><small>{a.description}</small></div><span className="demo-role-check">{selected===a.email?<Check size={15}/>:null}</span></button>)}</div><form onSubmit={submit}><label className="demo-label">Demo email<input readOnly value={selected}/></label><label className="demo-label">Demo password<input value={password} onChange={e=>setPassword(e.target.value)} type="text" autoComplete="off"/></label>{error&&<div className="demo-error" role="alert">{error}</div>}<button className="demo-btn primary demo-sign-in" type="submit">Enter demo workspace <ArrowRight size={18}/></button></form><div className="demo-credentials"><span>Shared demo password</span><code>{DEMO_PASSWORD}</code><span>· Sample accounts only</span></div><div className="demo-safe-note"><ShieldCheck size={18}/><p>No backend connection. No actual payment processing. Your changes are saved locally and can be reset at any time.</p></div></div></div>
+    <div className="demo-login-right"><div className="demo-login-card"><Pill tone="amber"><ShieldCheck size={13}/> PUBLIC DEMO — NO REAL DATA</Pill><h2>Explore StratifyPOS</h2><p className="demo-muted">Choose a sample account to see the system from different roles. No registration required.</p><div className="demo-role-picker">{demoAccounts.map(a=><button type="button" onClick={()=>{setSelected(a.email);setPassword(DEMO_PASSWORD);setError('');}} className={'demo-role '+(selected===a.email?'selected':'')} key={a.email}><div className="demo-role-avatar">{a.name[0]}</div><div><strong>{a.role[0].toUpperCase()+a.role.slice(1)}</strong><small>{a.description}</small></div><span className="demo-role-check">{selected===a.email?<Check size={15}/>:null}</span></button>)}</div><form onSubmit={submit}><label className="demo-label">Demo email<input readOnly value={selected}/></label><label className="demo-label">Demo password<input value={password} onChange={e=>setPassword(e.target.value)} type="text" autoComplete="off"/></label>{error&&<div className="demo-error" role="alert">{error}</div>}<button className="demo-btn primary demo-sign-in" type="submit">Enter demo workspace <ArrowRight size={18}/></button></form><a className="demo-btn secondary demo-sign-in" href="/?demoPartner=1">Explore affiliate partner preview <ArrowRight size={16}/></a><div className="demo-credentials"><span>Shared demo password</span><code>{DEMO_PASSWORD}</code><span>· Sample accounts only</span></div><div className="demo-safe-note"><ShieldCheck size={18}/><p>No backend connection. No actual payment processing. Your changes are saved locally and can be reset at any time.</p></div></div></div>
   </div>;
 }
 function Dashboard({data,ext,open}:{data:DemoData;ext:DemoExtension;open:(page:Page)=>void}) {
@@ -245,7 +247,7 @@ function Products({data,ext,updateExtension,change,notify}:{data:DemoData;ext:De
   <label className="demo-label">Barcode<input value={draft.barcode} onChange={e=>setDraft({...draft,barcode:e.target.value})}/></label>
   <label className="demo-label">Emoji<input value={draft.emoji} onChange={e=>setDraft({...draft,emoji:e.target.value})}/></label>{([['price','Price (PHP)'],['cost','Cost (PHP)'],['stock','Starting stock'],['reorder','Reorder threshold']] as const).map(([key,label])=><label className="demo-label" key={key}>{label}<input required disabled={key==='stock'&&!!draft.id} min="0" step={key==='stock'||key==='reorder'?'1':'.01'} type="number" value={draft[key]} onChange={e=>setDraft({...draft,[key]:e.target.value})}/></label>)}</div><div className="demo-actions"><button type="button" className="demo-btn secondary" onClick={()=>setDraft(null)}>Cancel</button><button className="demo-btn primary" type="submit" disabled={draft.itemType==='membership'&&!draft.id}>Save product</button></div></form></div></div>}</>;
 }
-function Inventory({data,ext,updateExtension,notify}:{data:DemoData;ext:DemoExtension;updateExtension:(fn:(e:DemoExtension)=>DemoExtension)=>void;notify:(s:string)=>void}) {
+function Inventory({data,ext,updateExtension,change,notify}:{data:DemoData;ext:DemoExtension;updateExtension:(fn:(e:DemoExtension)=>DemoExtension)=>void;change:(fn:(d:DemoData)=>DemoData)=>void;notify:(s:string)=>void}) {
  const [selected,setSelected]=useState<DemoProduct|null>(null);
  const [branch,setBranch]=useState('b1');
  const [amount,setAmount]=useState('10'),[reason,setReason]=useState('Manual stock count correction');
@@ -254,6 +256,7 @@ function Inventory({data,ext,updateExtension,notify}:{data:DemoData;ext:DemoExte
  const balance=(p:DemoProduct)=>ext.balances[branch]?.[p.id]||0;
  const low=physical.filter(p=>balance(p)<=p.reorder).length;
  const total=physical.reduce((n,p)=>n+balance(p),0);
+ function removeTracking(p:DemoProduct){const issue=stockConfigurationError(p,ext,data.orders);if(issue){notify(issue);return;}if(!window.confirm('Remove unused stock tracking for '+p.name+'? Its catalog entry remains available.'))return;change(old=>({...old,products:old.products.map(row=>row.id===p.id?{...row,trackInventory:false,stock:0,reorder:0,kind:productClass(row)==='food_beverage'?'food_beverage':'non_stock'}:row)}));notify('Unused stock tracking removed.');}
  function adjust(e:React.FormEvent){e.preventDefault();if(!selected)return;
   const count=Number(amount),current=balance(selected),delta=(direction==='in'?1:-1)*count;
   if(!Number.isInteger(count)||count<=0||count>10000||current+delta<0){setError('Invalid quantity or insufficient branch stock');return;}
@@ -273,7 +276,7 @@ function Inventory({data,ext,updateExtension,notify}:{data:DemoData;ext:DemoExte
  <div className="demo-metrics demo-metrics-three"><Metric label="Stock items" value={String(physical.length)} icon={Package} tone="sage" detail="Monitored physical catalog"/>
  <Metric label="Low stock alerts" value={String(low)} icon={AlertTriangle} tone="sand" detail="At or below reorder point"/>
  <Metric label="Total units on hand" value={String(total)} icon={Store} tone="peach" detail="For selected branch"/></div>
- <Card title="Branch stock balances"><Table heads={['Item','Category','On hand','Reorder at','Status','Action']}>{physical.map(p=><tr key={p.id}><td><span className="demo-table-emoji">{p.emoji}</span><b>{p.name}</b></td><td>{p.category}</td><td>{balance(p)} {p.unit||'pcs'}</td><td>{p.reorder} {p.unit||'pcs'}</td><td><Pill tone={balance(p)<=p.reorder?'amber':'green'}>{balance(p)<=p.reorder?'Low stock':'Healthy'}</Pill></td><td><button className="demo-link" onClick={()=>{setSelected(p);setAmount('10');setDirection('in');}}>Adjust stock</button></td></tr>)}</Table></Card>
+ <Card title="Branch stock balances"><Table heads={['Item','Category','On hand','Reorder at','Status','Action']}>{physical.map(p=><tr key={p.id}><td><span className="demo-table-emoji">{p.emoji}</span><b>{p.name}</b></td><td>{p.category}</td><td>{balance(p)} {p.unit||'pcs'}</td><td>{p.reorder} {p.unit||'pcs'}</td><td><Pill tone={balance(p)<=p.reorder?'amber':'green'}>{balance(p)<=p.reorder?'Low stock':'Healthy'}</Pill></td><td><button className="demo-link" onClick={()=>{setSelected(p);setAmount('10');setDirection('in');}}>Adjust stock</button><button className="demo-link" onClick={()=>removeTracking(p)}>Remove stock tracking</button></td></tr>)}</Table></Card>
  {selected&&<div className="demo-modal-backdrop" onMouseDown={()=>setSelected(null)}><div className="demo-modal" role="dialog" aria-modal="true" aria-label="Stock adjustment" onMouseDown={e=>e.stopPropagation()}><h2>Adjust branch stock</h2>
  <p>{selected.emoji} {selected.name} · {balance(selected)} at {data.branches.find(b=>b.id===branch)?.name}</p>
  <form onSubmit={adjust}><label className="demo-label">Adjustment<select value={direction} onChange={e=>setDirection(e.target.value as 'in'|'out')}><option value="in">Stock in (+)</option><option value="out">Stock out (-)</option></select></label>
