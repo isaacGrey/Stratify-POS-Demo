@@ -301,7 +301,8 @@ test('full refund of renewal restores previous expiry and rejects reversing olde
 test('cashier demo navigation exposes memberships with read-only reception workflow',()=>{
  const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8');
  const service=readFileSync(new URL('../src/workflows.tsx',import.meta.url),'utf8');
- assert(demo.canViewDemoPage('cashier','memberships','food',true));
+ assert(!demo.canViewDemoPage('cashier','memberships','food',true));
+ assert(demo.canViewDemoPage('cashier','memberships','food',true,{...demo.initialDemoAccess(),business:{memberships:true}}));
  assert(service.includes("readonly=role==='cashier'"));
  assert(service.includes("{!readonly&&<Section title=\"Issue customer membership\""));
  assert(service.includes("{!readonly&&e.status==='active'"));
@@ -315,7 +316,7 @@ test('new browser demo data models are initialized and preserve compatibility',(
  assert.equal(data.kitchenEnabled,true);
  assert(extension.appointments.length>=2);
  assert(extension.attendanceLog.length>=3);
- assert.deepEqual(demo.demoAccounts.map(account=>account.role),['owner','manager','cashier']);
+ assert.deepEqual(demo.demoAccounts.map(account=>account.role),['owner','manager','cashier','staff']);
  assert.equal(demo.demoAccounts.some(account=>account.email==='admin@demo.stratifypos.app'),false);
  assert.equal('platformNotifications' in extension,false);
 });
@@ -358,7 +359,7 @@ test('new demo screens retain cashier access, kitchen restriction and appointmen
  assert(!ui.includes('DemoPlatformUsers'));
  assert(!ui.includes('DemoPlatformDashboard'));
  assert(!ui.includes('DemoNotificationBell'));
- assert(ui.includes('if(!account)return <Login onLogin={login}/>;'));
+ assert(ui.includes('if(!account||!activePage)return <Login accounts={accounts} onLogin={login} reset={reset}/>;'));
  assert.equal(existsSync(new URL('../src/demo-admin.tsx',import.meta.url)),false);
   assert(!demo.canViewDemoPage('cashier','kitchen','non_food',true));
  assert(ui.includes("'appointments'"));
@@ -375,7 +376,8 @@ test('public demo does not offer a platform admin role or platform administratio
  assert.deepEqual(demo.demoAccounts.map(x=>x.email),[
    'owner@demo.stratifypos.app',
    'manager@demo.stratifypos.app',
-   'cashier@demo.stratifypos.app'
+   'cashier@demo.stratifypos.app',
+   'staff@demo.stratifypos.app'
  ]);
  assert(!source.includes("'super_admin'"));
  assert(!ui.includes('platform_users'));
@@ -384,18 +386,20 @@ test('public demo does not offer a platform admin role or platform administratio
  // so the app renders the demo login instead of giving access to any dashboard.
  const previous='admin@demo.stratifypos.app';
  assert.equal(demo.demoAccounts.find(account=>account.email===previous),undefined);
- assert(ui.includes("if(!account)return <Login onLogin={login}/>;"));
+ assert(ui.includes("if(!account||!activePage)return <Login accounts={accounts} onLogin={login} reset={reset}/>;"));
 });
 
 test('explicit role routes fail closed, cashier lands in POS and food-only routes are gated',()=>{
- for(const role of ['owner','manager','cashier']){
+ for(const role of ['owner','manager','cashier','staff']){
   assert.equal(demo.canViewDemoPage(role,'unknown','food',true),false);
   assert.equal(demo.canViewDemoPage(role,'pos','food',true),true);
   assert.equal(demo.canViewDemoPage(role,'qr','non_food',true),false);
   assert.equal(demo.canViewDemoPage(role,'kitchen','food',false),false);
  }
- for(const page of ['overview','staff','products','inventory','settings','qr','reports','guide'])assert.equal(demo.canViewDemoPage('cashier',page,'food',true),false);
- assert.equal(demo.canViewDemoPage('cashier','appointments','food',true),true);
+ for(const page of ['overview','products','inventory','settings','qr','reports','guide'])assert.equal(demo.canViewDemoPage('cashier',page,'food',true),false);
+ assert.equal(demo.canViewDemoPage('cashier','appointments','food',true),false);
+ assert.equal(demo.canViewDemoPage('staff','staff','food',true),true);
+ assert.equal(demo.canViewDemoPage('staff','pos','food',true),false);
  assert.equal(demo.canViewDemoPage(undefined,'pos','food',true),false);
 });
 test('personal timecards do not reveal other employees',()=>{
@@ -439,5 +443,48 @@ test('affiliate preview is separate from merchant accounts and never uses real p
  assert(source.includes('Active paid subscriptions'));
  assert(!source.includes('fetch('));
  assert(!source.includes('localStorage'));
- assert.deepEqual(demo.demoAccounts.map(a=>a.role),['owner','manager','cashier']);
+ assert.deepEqual(demo.demoAccounts.map(a=>a.role),['owner','manager','cashier','staff']);
+});
+
+test('explicit approvals and blocks are enforced for all merchant accounts',()=>{
+ const d=demo.initialDemoData(),[owner,,cashier,staff]=demo.demoAccounts;
+ for(const a of demo.demoAccounts){assert(!demo.canAccountView(d,a,'memberships'));assert(!demo.canAccountView(d,a,'appointments'));}
+ d.access.business.memberships=true;
+ assert(demo.canAccountView(d,owner,'memberships'));assert(demo.canAccountView(d,cashier,'memberships'));assert(!demo.canAccountView(d,staff,'memberships'));
+ d.access.users[cashier.email]={enabled:true,modules:{appointments:true,memberships:false}};
+ assert(demo.canAccountView(d,cashier,'appointments'));assert(!demo.canAccountView(d,cashier,'memberships'));
+ d.access.business.appointments=false;assert(!demo.canAccountView(d,cashier,'appointments'));
+ d.access.users[cashier.email].enabled=false;assert(!demo.availableDemoAccounts(d).includes(cashier));assert(!demo.canAccountView(d,cashier,'pos'));
+ assert(!demo.eligibleDemoEmployees(d,owner).some(s=>s.role==='cashier'));
+});
+test('attendance verifies selected employee credentials, permissions and break lifecycle',()=>{
+ let data=demo.initialDemoData(),ext=demo.seedExtension(data.products);
+ const [owner,,,staff]=demo.demoAccounts;
+ const call=(action,time,email=staff.email,password=demo.DEMO_PASSWORD,actor=staff)=>demo.recordDemoAttendance(data,ext,actor,'s4',email,password,action,time);
+ const run=(action,time)=>{const next=call(action,time);data=next.data;ext=next.extension;};
+ assert.throws(()=>call('clock-in','2026-11-24T00:00:00Z',owner.email),/credentials/);
+ assert.throws(()=>call('clock-in','2026-11-24T00:00:00Z',staff.email,'wrong'),/credentials/);
+ assert.throws(()=>call('clock-out','2026-11-24T00:00:00Z'),/Clock in/);
+ run('clock-in','2026-11-24T00:00:00Z');assert.throws(()=>call('clock-in','2026-11-24T00:01:00Z'),/Already/);
+ run('break-start','2026-11-24T02:00:00Z');assert.throws(()=>call('clock-out','2026-11-24T02:30:00Z'),/End your break/);
+ run('break-end','2026-11-24T02:30:00Z');run('clock-out','2026-11-24T08:00:00Z');
+ assert.equal(demo.demoWorkedHours(ext.attendanceLog[0]),7.5);assert.equal(ext.attendanceLog[0].staffId,'s4');
+ data.access.users[staff.email]={enabled:false,modules:{}};assert.throws(()=>call('clock-in','2026-11-24T09:00:00Z',staff.email,demo.DEMO_PASSWORD,owner),/credentials/);
+});
+test('deletion is confirmed, persistent, and resets restore defaults',()=>{
+ const data=demo.initialDemoData(),ext=demo.seedExtension(data.products),[owner,,,staff]=demo.demoAccounts;
+ assert.throws(()=>demo.deleteDemoUser(data,ext,owner.email,owner.email),/only owner/);
+ assert.throws(()=>demo.deleteDemoUser(data,ext,staff.email,'wrong'),/exact/);
+ const next=demo.deleteDemoUser(data,ext,staff.email,staff.email);assert(!demo.availableDemoAccounts(next).includes(staff));
+ assert.throws(()=>demo.deleteDemoBusiness(next,'wrong'),/exact/);
+ const deleted=demo.deleteDemoBusiness(next,demo.DEMO_BUSINESS_NAME);
+ assert.equal(deleted.data.staff.length,0);assert.equal(deleted.data.branches.length,0);assert.equal(deleted.data.orders.length,0);assert.equal(deleted.extension.appointments.length,0);
+ const old=globalThis.localStorage,store=new Map();globalThis.localStorage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)};
+ try{demo.writeDemoData(next);assert(!demo.availableDemoAccounts(demo.readDemoData()).includes(staff));demo.writeDemoData(deleted.data);demo.writeExtension(deleted.extension);assert.equal(demo.readDemoData().products.length,0);assert.equal(demo.readExtension([]).plans.length,0);}finally{globalThis.localStorage=old;}
+ assert.equal(demo.availableDemoAccounts(demo.initialDemoData()).length,4);
+});
+test('UI exposes local-only simulator, gated POS membership and attendance under Team',()=>{
+ const ui=readFileSync(new URL('../src/demo.tsx',import.meta.url),'utf8'),preview=readFileSync(new URL('../src/demo-access-preview.tsx',import.meta.url),'utf8');
+ assert(ui.includes('demoAccess'));assert(ui.includes('recordDemoAttendance'));assert(!ui.includes('<PersonalAttendance'));
+ assert(ui.includes('hasMembership&&!membershipAllowed'));assert(ui.includes('canAccountView(data,account,id)'));assert(preview.includes('deleteDemoBusiness'));assert(preview.includes('Workspace enabled'));assert(!preview.includes('fetch('));
 });

@@ -235,7 +235,7 @@ export function RefundWorkflows({data,ext,update,notify}:Props){
  <div className="demo-workflow-span"><Message error={error}/><button className="demo-btn primary">Record cash refund</button></div></form></Section>
  <Section title="Refund ledger"><div className="demo-table-scroll"><table className="demo-table"><thead><tr><th>Sale</th><th>Amount</th><th>Reason</th><th>Date</th></tr></thead><tbody>{ext.refunds.map(r=><tr key={r.id}><td>{r.orderId}</td><td>{currency(r.amount)}</td><td>{r.reason}</td><td>{r.date.slice(0,10)}</td></tr>)}</tbody></table></div></Section></>;
 }
-export function DemoFeatureGuide(){return <><Intro title="Feature walkthrough" text="Explore the complete sample business journey. Each workflow is fully isolated from production data."/><div className="demo-workflow-cards">{[
+export function DemoFeatureGuide({permitted}:{permitted:(page:any)=>boolean}){return <><Intro title="Feature walkthrough" text="Explore the complete sample business journey. Each workflow is fully isolated from production data."/><div className="demo-workflow-cards">{[
  ['Products & services','Create and edit catalog items, including physical goods and services.'],
  ['POS checkout','Build a cart, apply discounts, record a sample payment and view the receipt.'],
  ['Stock transfers','Move stock between branches and inspect recorded movements.'],
@@ -244,4 +244,4 @@ export function DemoFeatureGuide(){return <><Intro title="Feature walkthrough" t
  ['QR & kitchen','Submit a table request, confirm simulated payment and progress the KDS.'],
  ['Register operations','Open registers, record cash movements and reconcile closing cash.'],
  ['Refunds & reporting','Review sales, record cash refunds and inspect the revenue impact.']
- ].map(([a,b])=><div className="demo-workflow-ticket" key={a}><b>{a}</b><p>{b}</p></div>)}</div></>}
+ ].filter(([a])=>a==='Products & services'?permitted('products'):a==='POS checkout'?permitted('pos'):a==='Stock transfers'?permitted('warehouse'):a==='Purchasing'?permitted('purchasing'):a==='Customer memberships'?permitted('memberships'):a==='QR & kitchen'?permitted('qr')&&permitted('kitchen'):a==='Register operations'?permitted('register'):permitted('refunds')&&permitted('reports')).map(([a,b])=><div className="demo-workflow-ticket" key={a}><b>{a}</b><p>{b}</p></div>)}</div></>}

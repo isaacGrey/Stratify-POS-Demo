@@ -1,7 +1,7 @@
 /** Synthetic, browser-local fixtures for the public portfolio demonstration.
  * This is NOT the production data model, authentication service, or API.
  */
-export type DemoRole = 'owner' | 'manager' | 'cashier';
+export type DemoRole = 'owner' | 'manager' | 'cashier' | 'staff';
 export type DemoPayment = 'cash' | 'gcash' | 'maya' | 'card';
 export type DemoOrderType = 'standard' | 'takeout' | 'dine_in' | 'delivery';
 
@@ -16,12 +16,12 @@ export interface DemoSale {
   payment: DemoPayment; lines: DemoSaleLine[]; subtotal: number;
   discount: number; tax: number; service: number; total: number; tender: number; customerId?:string;
 }
-export interface DemoStaff { id: string; name: string; role: DemoRole; branchId: string; shiftStart: string | null; }
+export interface DemoStaff { id: string; name: string; role: DemoRole; branchId: string; shiftStart: string | null; breakStartedAt?:string|null; breakMs?:number; }
 export interface DemoData {
   version: 1; products: DemoProduct[]; branches: DemoBranch[];
   orders: DemoSale[]; staff: DemoStaff[];
   taxRate: number; serviceRate: number; footer: string; promotionActive: boolean;
-  businessType:'food'|'non_food'; kitchenEnabled:boolean;
+  businessType:'food'|'non_food'; kitchenEnabled:boolean; access?:DemoAccess;
 }
 export const DEMO_STORAGE_KEY = 'stratify-portfolio-demo-v1';
 export const DEMO_SESSION_KEY = 'stratify-portfolio-demo-user-v1';
@@ -29,7 +29,8 @@ export const DEMO_PASSWORD = 'demo1234';
 export const demoAccounts = [
   { email: 'owner@demo.stratifypos.app', name: 'Alex Rivera', role: 'owner' as DemoRole, description: 'Full business overview and management' },
   { email: 'manager@demo.stratifypos.app', name: 'Sam Reyes', role: 'manager' as DemoRole, description: 'Inventory, menu, reports, and sales' },
-  { email: 'cashier@demo.stratifypos.app', name: 'Jamie Cruz', role: 'cashier' as DemoRole, description: 'Checkout, sales history, and attendance' }
+  { email: 'cashier@demo.stratifypos.app', name: 'Jamie Cruz', role: 'cashier' as DemoRole, description: 'Checkout, sales history, and attendance' },
+  {email:'staff@demo.stratifypos.app',name:'Morgan Lee',role:'staff' as DemoRole,description:'Attendance without cashier access'}
 ];
 const daysAgo = (offset: number, hours = 12) => {
   const value = new Date();
@@ -96,10 +97,11 @@ export function initialDemoData(): DemoData {
     staff:[
       {id:'s1',name:'Alex Rivera',role:'owner',branchId:'b1',shiftStart:null},
       {id:'s2',name:'Sam Reyes',role:'manager',branchId:'b2',shiftStart:null},
-      {id:'s3',name:'Jamie Cruz',role:'cashier',branchId:'b1',shiftStart:null}
+      {id:'s3',name:'Jamie Cruz',role:'cashier',branchId:'b1',shiftStart:null},
+      {id:'s4',name:'Morgan Lee',role:'staff',branchId:'b2',shiftStart:null}
     ],
     taxRate:0,serviceRate:0,footer:'Thank you for your purchase at StratifyPOS Demo!',
-    promotionActive:true,businessType:'food',kitchenEnabled:true
+    promotionActive:true,businessType:'food',kitchenEnabled:true,access:initialDemoAccess()
   };
 }
 export function readDemoData(): DemoData {
@@ -108,11 +110,13 @@ export function readDemoData(): DemoData {
     if (stored) {
       const value: DemoData = JSON.parse(stored);
       if (value.version===1 && Array.isArray(value.products) && Array.isArray(value.orders) && Array.isArray(value.branches) && Array.isArray(value.staff)) {
+        if(value.access?.deleted)return {...value,products:[],branches:[],orders:[],staff:[]};
+        const staff=value.access?value.staff:[...value.staff,...initialDemoData().staff.filter(s=>!value.staff.some(existing=>existing.id===s.id))];
         // Retain all visitor edits while adding the multi-industry sample catalog.
         const known = new Set(value.products.map(p=>p.id));
         const added=seedProducts.filter(p=>!known.has(p.id)).map(normalizeProduct);
         const products=value.products.map(normalizeProduct);
-        return {...value,products:[...products,...added],businessType:value.businessType||'food',
+        return {...value,staff,access:value.access??initialDemoAccess(),products:[...products,...added],businessType:value.businessType||'food',
           kitchenEnabled:value.businessType==='non_food'?false:value.kitchenEnabled!==false};
       }
     }
@@ -168,7 +172,7 @@ export interface DemoAppointment {
  contact:string;resourceName:string;requirements:string;notes:string;start:string;end:string;
  status:'pending'|'confirmed'|'rescheduled'|'completed'|'cancelled';
 }
-export interface DemoAttendanceRecord {id:string;staffId:string;branchId:string;clockIn:string;clockOut:string|null}
+export interface DemoAttendanceRecord {id:string;staffId:string;branchId:string;clockIn:string;clockOut:string|null;breakMs?:number}
 export interface DemoExtension {
  version:2;
  balances:Record<string,Record<string,number>>;
@@ -205,6 +209,7 @@ export function seedExtension(products:DemoProduct[]=seedProducts):DemoExtension
 }
 export function readExtension(products:DemoProduct[]=seedProducts):DemoExtension {
  try {
+  if(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)||'null')?.access?.deleted)return emptyDemoExtension();
   const value=JSON.parse(localStorage.getItem(EXTENSION_KEY)||'null');
   if(value?.version===2&&value.balances&&Array.isArray(value.entitlements)&&Array.isArray(value.movements)) {
     const balances:Record<string,Record<string,number>>={
@@ -361,12 +366,74 @@ export function validateDemoAppointment(existing:readonly DemoAppointment[],draf
 
 export const merchantPages=['overview','pos','products','inventory','warehouse','purchasing','memberships','appointments','register','qr','kitchen','refunds','guide','orders','reports','staff','branches','settings'] as const;
 export type MerchantPage=typeof merchantPages[number];
-const cashierPages:readonly MerchantPage[]=['pos','orders','register','kitchen','memberships','appointments'];
-export function canViewDemoPage(role:DemoRole|undefined,page:string,businessType:DemoData['businessType'],kitchenEnabled:boolean):boolean {
- if(!role||!merchantPages.includes(page as MerchantPage))return false;
+const cashierPages:readonly MerchantPage[]=['pos','orders','register','kitchen','memberships','appointments','staff'];
+const staffPages:readonly MerchantPage[]=['staff','kitchen'];
+export type DemoPermissions=Partial<Record<MerchantPage,boolean>>;
+export interface DemoAccess {deleted:boolean;business:DemoPermissions;users:Record<string,{enabled:boolean;modules:DemoPermissions}>}
+export function initialDemoAccess():DemoAccess{return {deleted:false,business:{},users:{}};}
+const manualPages=new Set<string>(['memberships','appointments']);
+export function canViewDemoPage(role:DemoRole|undefined,page:string,businessType:DemoData['businessType'],kitchenEnabled:boolean,access:DemoAccess=initialDemoAccess(),email=''):boolean {
+ if(!role||access.deleted||!merchantPages.includes(page as MerchantPage))return false;
+ const key=page as MerchantPage,member=access.users[email];
+ if(member?.enabled===false||access.business[key]===false||member?.modules[key]===false)return false;
+ if(manualPages.has(key)&&access.business[key]!==true&&member?.modules[key]!==true)return false;
  if(page==='qr'&&businessType!=='food')return false;
  if(page==='kitchen'&&(businessType!=='food'||kitchenEnabled!==true))return false;
- return role==='owner'||role==='manager'||(role==='cashier'&&cashierPages.includes(page as MerchantPage));
+ if(page==='register'&&(access.business.pos===false||member?.modules.pos===false))return false;
+ return role==='owner'||role==='manager'||(role==='cashier'&&cashierPages.includes(key))||(role==='staff'&&staffPages.includes(key));
+}
+export type DemoAccount=typeof demoAccounts[number];
+export function canAccountView(data:DemoData,account:DemoAccount|undefined,page:string):boolean {
+ return !!account&&data.staff.some(s=>s.name===account.name&&s.role===account.role)&&canViewDemoPage(account.role,page,data.businessType,data.kitchenEnabled,data.access,account.email);
+}
+export function availableDemoAccounts(data:DemoData):DemoAccount[]{return demoAccounts.filter(a=>merchantPages.some(page=>canAccountView(data,a,page)));}
+export function eligibleDemoEmployees(data:DemoData,caller:DemoAccount):DemoStaff[]{
+ if(!canAccountView(data,caller,'staff'))return [];
+ return data.staff.filter(s=>canAccountView(data,demoAccounts.find(a=>a.name===s.name),'staff'));
+}
+export type DemoAttendanceAction='clock-in'|'clock-out'|'break-start'|'break-end';
+export function recordDemoAttendance(data:DemoData,ext:DemoExtension,caller:DemoAccount,employeeId:string,username:string,password:string,action:DemoAttendanceAction,now=new Date().toISOString()){
+ const person=eligibleDemoEmployees(data,caller).find(s=>s.id===employeeId);
+ const account=demoAccounts.find(a=>a.name===person?.name);
+ if(!person||!account||username.trim().toLowerCase()!==account.email||password!==DEMO_PASSWORD)throw Error('Employee credentials or attendance access are invalid.');
+ if(!data.branches.some(b=>b.id===person.branchId&&b.active))throw Error('Assigned branch is unavailable.');
+ if(!Number.isFinite(Date.parse(now))||(person.shiftStart&&Date.parse(now)<Date.parse(person.shiftStart))||(person.breakStartedAt&&Date.parse(now)<Date.parse(person.breakStartedAt)))throw Error('Invalid attendance time.');
+ let next={...person},log=ext.attendanceLog;
+ if(action==='clock-in'){
+  if(person.shiftStart)throw Error('Already clocked in.');
+  next={...next,shiftStart:now,breakStartedAt:null,breakMs:0};
+ }else{
+  if(!person.shiftStart)throw Error('Clock in before recording attendance.');
+  if(action==='break-start'){
+   if(person.breakStartedAt)throw Error('A break is already in progress.');
+   next.breakStartedAt=now;
+  }else if(action==='break-end'){
+   if(!person.breakStartedAt)throw Error('Start a break first.');
+   next.breakMs=(person.breakMs||0)+Math.max(0,Date.parse(now)-Date.parse(person.breakStartedAt));next.breakStartedAt=null;
+  }else if(action==='clock-out'){
+   if(person.breakStartedAt)throw Error('End your break before clocking out.');
+   log=[{id:newId(),staffId:person.id,branchId:person.branchId,clockIn:person.shiftStart,clockOut:now,breakMs:person.breakMs||0},...log];
+   next={...next,shiftStart:null,breakStartedAt:null,breakMs:0};
+  }else throw Error('Invalid attendance action.');
+ }
+ return {data:{...data,staff:data.staff.map(s=>s.id===person.id?next:s)},extension:{...ext,attendanceLog:log}};
+}
+export function demoWorkedHours(record:DemoAttendanceRecord):number{return record.clockOut?Math.max(0,Date.parse(record.clockOut)-Date.parse(record.clockIn)-(record.breakMs||0))/3600000:0;}
+export const DEMO_BUSINESS_NAME='Stratify Demo Business';
+export function emptyDemoExtension():DemoExtension{return {version:2,balances:{},movements:[],suppliers:[],purchases:[],registers:[],refunds:[],holds:[],plans:[],customers:[],entitlements:[],requests:[],tickets:[],appointments:[],attendanceLog:[]};}
+export function deleteDemoBusiness(data:DemoData,confirmation:string){
+ if(confirmation!==DEMO_BUSINESS_NAME)throw Error('Type the exact sample business name.');
+ if(data.access?.deleted)throw Error('Sample business already deleted.');
+ return {data:{...data,products:[],orders:[],branches:[],staff:[],access:{...initialDemoAccess(),deleted:true}},extension:emptyDemoExtension()};
+}
+export function deleteDemoUser(data:DemoData,ext:DemoExtension,email:string,confirmation:string):DemoData{
+ const account=demoAccounts.find(a=>a.email===email),person=data.staff.find(s=>s.name===account?.name);
+ if(!account||!person||data.access?.deleted)throw Error('Sample account unavailable.');
+ if(confirmation!==email)throw Error('Type the exact sample login email.');
+ if(person.role==='owner'&&!data.staff.some(s=>s.id!==person.id&&s.role==='owner'))throw Error('Delete the business before deleting its only owner.');
+ if(person.shiftStart||ext.attendanceLog.some(r=>r.staffId===person.id)||data.orders.some(o=>o.cashier===person.name)||ext.registers.some(r=>r.cashier===person.name)||ext.holds.some(h=>h.cashier===person.name))throw Error('This account has retained sample activity. Block its workspace instead, or reset the demo.');
+ const access=data.access??initialDemoAccess(),users={...access.users};delete users[email];
+ return {...data,staff:data.staff.filter(s=>s.id!==person.id),access:{...access,users}};
 }
 export function personalAttendance(records:readonly DemoAttendanceRecord[],staffId:string):DemoAttendanceRecord[] {
  return records.filter(r=>r.staffId===staffId).sort((a,b)=>Date.parse(b.clockIn)-Date.parse(a.clockIn));
